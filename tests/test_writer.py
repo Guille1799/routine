@@ -159,3 +159,55 @@ def test_r4_r7_racing_writers_open_the_day_exactly_once(tmp_path, monkeypatch):
         assert codes.count(0) == 1 and codes.count(3) == len(codes) - 1, codes
         lines = paths.diary_file(root, "2026-10-12").read_text(encoding="utf-8").splitlines()
         assert sum('"open_day"' in line for line in lines) == 1
+
+
+def test_r17_active_task_has_a_start_time_for_the_band(root):
+    writer.record(root, "open_day", {"mode": "normal"}, day="2026-10-12")
+    t = add(root)
+    writer.record(root, "start", task=t)
+    assert state.current(root)["tasks"][t]["since"]
+    writer.record(root, "pause", task=t)
+    assert "since" not in state.current(root)["tasks"][t]
+
+
+def test_r27_usage_is_summed_per_task_and_shown(root):
+    from routine import view
+    writer.record(root, "open_day", {"mode": "normal"}, day="2026-10-12")
+    t = add(root)
+    for _ in range(3):
+        writer.record(root, "usage", {"input_tokens": 10, "output_tokens": 5,
+                                      "cache_read_input_tokens": 100,
+                                      "cache_creation_input_tokens": 1}, task=t)
+    assert state.current(root)["tasks"][t]["tokens"] == {"input": 333, "output": 15}
+    assert "333 in / 15 out" in view.render(state.current(root))
+
+
+def test_r32_done_fields_come_from_the_user_config(root):
+    from routine import config
+    (root / "config").mkdir()
+    with pytest.raises(config.ConfigError):
+        config.done_fields(root)
+    example = REPO / "examples" / "data" / "config" / "done_fields.toml"
+    (root / "config" / "done_fields.toml").write_text(example.read_text(encoding="utf-8"),
+                                                      encoding="utf-8")
+    ids = [f["id"] for f in config.done_fields(root)]
+    assert ids[0] == "rating" and "note" in ids
+    (root / "config" / "done_fields.toml").write_text('[[field]]\nid = "x"\nkind = "dial"\n',
+                                                      encoding="utf-8")
+    with pytest.raises(config.ConfigError):
+        config.done_fields(root)
+
+
+def test_r18_drift_is_warned_once_per_episode(root):
+    writer.record(root, "open_day", {"mode": "normal"}, day="2026-10-12")
+    t = add(root)
+    writer.record(root, "drift_warn", {"message": "m1"}, task=t)
+    with pytest.raises(writer.RuleError):            # unanswered warning still open
+        writer.record(root, "drift_warn", {"message": "m2"}, task=t)
+    writer.record(root, "drift_reply", {"action": "back"}, task=t)
+    writer.record(root, "drift_warn", {"message": "m3"}, task=t)   # new episode after "back"
+    writer.record(root, "drift_reply", {"action": "continue", "why": "deadline"}, task=t)
+    with pytest.raises(writer.RuleError):            # already justified staying
+        writer.record(root, "drift_warn", {"message": "m4"}, task=t)
+    with pytest.raises(writer.RuleError):            # nothing open to answer
+        writer.record(root, "drift_reply", {"action": "back"}, task=t)
