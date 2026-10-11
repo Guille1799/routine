@@ -9,6 +9,7 @@ import {
   BREAKS,
   askFor,
   band,
+  clockOf,
   cleanFields,
   inboxText,
   missingFields,
@@ -17,6 +18,7 @@ import {
   resolveTask,
   aliasOf,
   taskList,
+  taskRows,
   writerArgv,
 } from './core'
 import type { DoneField, Today, WriterCall, WriterOutcome } from './core'
@@ -24,6 +26,7 @@ import type { DoneField, Today, WriterCall, WriterOutcome } from './core'
 type $ = EngineInterface
 
 export const TOOL = 'mcp__routine__routine'
+export const PANE = 'routine-tasks'
 const TICK_MS = 30_000
 
 const form = atom({ plugin: 'routine', key: 'form' } as const, null)
@@ -178,6 +181,11 @@ async function closeOrShow($: $, out: WriterOutcome): Promise<void> {
     return
   }
   await update($, form, x => (x ? { ...x, error: out.error } : x))
+}
+
+async function startTask($: $, task: string): Promise<void> {
+  const out = await write($, { action: 'start', task })
+  if (!out.ok) $.ui.toast(`Start: ${out.error}`)
 }
 
 async function startBreak($: $, n: number): Promise<void> {
@@ -487,6 +495,7 @@ export const register: Register = (on, options) => {
             onPress={() => update($, breakPick, v => !v)}
           />
           <Button key="recap" label="Recap" hotkey="r" onPress={() => recap($)} />
+          <Button key="tasks" label="Tasks" hotkey="t" onPress={() => void $.ui.open({ id: PANE, title: 'Today' })} />
           {asOf}
         </Box>
       )
@@ -505,5 +514,35 @@ export const register: Register = (on, options) => {
     }
     if (f) rows.push(...(await formRows($, f, { Box, Text, Button, Input })))
     return <Box key="band" flexDirection="column">{rows}</Box>
+  })
+
+  on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
+    const { Box, Text, Button } = $.ui.resolve(e)
+    const r = await readToday($)
+    if (!r.today) return <Box key="tasks"><Text dimColor>{r.problem}</Text></Box>
+    const today = r.today
+    const rows = taskRows(today)
+    const inbox = Object.keys(today.inbox).length
+    return (
+      <Box key="tasks" flexDirection="column">
+        <Text dimColor>{today.day} · {band(today, await $.clock.now()).progress} · inbox {inbox} · data {clockOf(today.last_ts)}</Text>
+        {rows.length === 0 && <Text dimColor>No tasks today.</Text>}
+        {rows.map(row => (
+          <Box key={`task-${row.id}`} flexDirection="column">
+            <Box key={`head-${row.id}`}>
+              <Text bold={row.action === 'done'}>{row.mark} {row.alias} {row.title}{row.carried ? ` · carried ${row.carried}x` : ''} </Text>
+              {row.action === 'start' && today.open && (
+                <Button key={`start-${row.id}`} label="Start" onPress={() => startTask($, row.id)} />
+              )}
+              {row.action === 'done' && (
+                <Button key={`done-${row.id}`} label="Done" variant="primary" onPress={() => openForm($, 'done')} />
+              )}
+            </Box>
+            {row.doneWhen && <Text dimColor>    done when: {row.doneWhen}</Text>}
+            {row.firstStep && <Text dimColor>    first step: {row.firstStep}</Text>}
+          </Box>
+        ))}
+      </Box>
+    )
   })
 }

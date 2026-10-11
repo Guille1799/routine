@@ -69,6 +69,7 @@ export type World = {
   forks: string[]
   logs: string[]
   toasts: string[]
+  opened: string[]
 }
 
 /** The argv the mod must send for a contract call, in this world's session. */
@@ -105,6 +106,7 @@ export function world(on: On, over: Partial<World> = {}): World {
     forks: [],
     logs: [],
     toasts: [],
+    opened: [],
     ...over,
   }
   mock.clock(on, { now: NOW })
@@ -165,6 +167,10 @@ export function world(on: On, over: Partial<World> = {}): World {
     w.toasts.push(e.text)
     return { value: undefined }
   })
+  on('ui.open', ($, e) => {
+    w.opened.push(e.id)
+    return { value: { isPlaced: true } as never }
+  })
   on('session.start', ($, e) => ({ cwd: e.cwd }))
   on('session.attach', () => ({ clientId: 'c1' }) as never)
   on('prompt.submit', ($, e) => ({ text: e.text, context: e.context }))
@@ -177,6 +183,11 @@ export const START = { cwd: CWD, surface: null, isInteractive: false } as const
 export const BAND_PROPS = {
   hasSurvey: false, isWorking: false, maxRows: 12, bodyColumns: 120,
   scroll: { bodyRows: 11, offset: 0 }, view: {},
+} as never
+
+export const PANE_PROPS = {
+  title: 'Today', isFocused: false, bodyColumns: 80, placement: 'dock',
+  scroll: { bodyRows: 20, offset: 0 }, view: {},
 } as never
 
 export function prompt(text: string) {
