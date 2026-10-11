@@ -28,7 +28,7 @@ Two parts: a **Windows scheduled task** that prepares the inventory before you a
    ```
 
    ```bash
-   ln -s "<repo>/skills/morning" ~/.claude/skills/morning
+   ln -s "<repo>/skills/plan-day" ~/.claude/skills/plan-day
    ```
 
    If you already have another skill called `morning`, link it under another folder name.

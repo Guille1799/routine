@@ -1,6 +1,6 @@
 ---
-name: morning
-description: Plan today with the routine, in about ten minutes and one question at a time. Closes yesterday if it is still open, reads today's calendar and unanswered mail (read-only), reads the prepared inventory, asks the day's mode and hours, asks the user for the one priority, and writes well-defined tasks through the routine's CLI. Use when the user says good morning, wants to plan the day, or invokes /morning.
+name: plan-day
+description: Plan today with the routine, in about ten minutes and one question at a time. Closes yesterday if it is still open, reads today's calendar and unanswered mail (read-only), reads the prepared inventory, asks the day's mode and hours, asks the user for the one priority, and writes well-defined tasks through the routine's CLI. Use when the user says good morning, wants to plan the day, or invokes /plan-day.
 ---
 
 # Morning
@@ -27,7 +27,7 @@ chose and a few tasks so well defined that each can be started without thinking.
 ## The CLI
 
 The routine repository is two levels above this skill's resolved folder (this file lives in
-`<repo>/skills/morning/`; Claude Code shows the folder as the skill's base directory). Find
+`<repo>/skills/plan-day/`; Claude Code shows the folder as the skill's base directory). Find
 it once:
 
 ```bash

@@ -321,10 +321,10 @@ def test_example_config_is_valid():
 # ---------------------------------------------------------------- R13 (text only)
 
 def test_r13_skill_text_keeps_the_order_and_the_never_rules():
-    """The skill's behaviour is checked by hand (skills/morning/CHECK.md). This only fails if
+    """The skill's behaviour is checked by hand (skills/plan-day/CHECK.md). This only fails if
     the written instructions lose a rule or the order of the morning."""
-    text = (REPO / "skills" / "morning" / "SKILL.md").read_text(encoding="utf-8")
-    assert text.startswith("---\nname: morning\n")
+    text = (REPO / "skills" / "plan-day" / "SKILL.md").read_text(encoding="utf-8")
+    assert text.startswith("---\nname: plan-day\n")
     steps = ["## Step 1 · Close yesterday", "## Step 2 · Calendar, then mail",
              "## Step 3 · The inventory", "## Step 4 · Mode and hours",
              "## Step 5 · The priority (asked, never proposed)", "## Step 6 · The tasks"]

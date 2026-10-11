@@ -33,7 +33,10 @@ def data_dir() -> Path:
         raise DataDirError(
             "no data folder: set ROUTINE_DATA_DIR or data_dir in routine.local.toml"
         )
-    path = Path(raw).expanduser().resolve()
+    path = Path(raw).expanduser()
+    if not path.is_absolute() and source == str(LOCAL_SETTINGS):
+        path = REPO_ROOT / path  # relative to the repo, whatever folder the caller runs in
+    path = path.resolve()
     if not path.is_dir():
         raise DataDirError(f"data folder from {source} does not exist: {path}")
     if path == REPO_ROOT or REPO_ROOT in path.parents:

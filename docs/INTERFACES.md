@@ -55,11 +55,24 @@ drift, tomorrow, last_ts`. Readers never write it. The band shows `last_ts` (D38
 
 ## 6 · Inventory (P2 → morning skill)
 
-`inventory/YYYY-MM-DD.json`: `{"generated": ISO, "channels": [{"id", "label", "status":
-"ok"|"error", "error"?, "count", "new": [{"id", "title", "link"?}]}]}`. No ranking field
-exists, on purpose (D19). A failed channel has `status: "error"`, never an empty list.
-"New" means not present in the previous inventory, by the channel's own id rule
-(`channels.toml`).
+```
+inventory/YYYY-MM-DD.json:
+{"generated": ISO, "day": "YYYY-MM-DD",
+ "channels": [{"id", "title", "label": "source", "status": "ok"|"error", "error"?,
+               "count", "new": [{"id", "title", "link"?}], "new_total", "baseline"?}],
+ "skipped":  [{"id", "title", "label": "copy"|"dead", "why"}],
+ "old":      [{"channel", "id", "title", "since": "YYYY-MM-DD"|null, "link"?}]}
+```
+
+- No ranking field exists, on purpose (D19).
+- A failed channel has `status: "error"` and `count` and `new` set to **null**, never `[]`.
+- `new` = items first seen today, cut to `max_new` (default 10) unless the channel is
+  `never_capped` (D5); `new_total` always says how many there are.
+- `baseline: true` = the channel is read for the first time, so nothing can be called new.
+- `old` = the oldest pending items of channels marked `old = true` (D31), two a day, never
+  the same one within 7 days.
+- Private state in `inventory/seen.json` (first and last day each item was seen; old items
+  offered).
 
 ## 7 · Naming and language
 
