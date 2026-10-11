@@ -18,11 +18,11 @@ piece that owns it is being built.
 | R6 | One active task at a time; starting another pauses the current one | D10 | tests/test_writer.py::test_r6_starting_a_task_pauses_the_active_one |
 | R7 | No new day while one is open, also under racing writers | D24, D28 | tests/test_writer.py::test_r4_r7_racing_writers_open_the_day_exactly_once |
 | R8 | Unfinished tasks and inbox items carry over automatically, same id, with a counter | D28 | tests/test_writer.py::test_r8_unfinished_tasks_and_inbox_carry_over_with_a_counter |
-| R9 | The prepared sheet collects the inventory without ranking, runs at logon if missed, and reports failed sources | D19, D38, D11 | pending: P2 |
-| R10 | One count per channel; only items new since the last sheet are expanded | D29, D5 | pending: P2 |
-| R11 | Opportunities are never capped | D5 | pending: P2 |
-| R12 | Every channel has a label (source / copy / dead); only sources are read; alerts are channels | D20, D30, D40 | pending: P2 |
-| R13 | The morning skill reads the calendar first, asks mode and hours, and asks (never proposes) the priority | D12, D19 | pending: P2 |
+| R9 | The prepared sheet collects the inventory without ranking, runs at logon if missed, and reports failed sources | D19, D38, D11 | tests/test_inventory.py::test_r9_inventory_never_ranks_and_reports_a_failed_source |
+| R10 | One count per channel; only items new since the last sheet are expanded | D29, D5 | tests/test_inventory.py::test_r10_one_count_per_channel_and_only_new_items_expanded |
+| R11 | Opportunities are never capped | D5 | tests/test_inventory.py::test_r11_opportunities_are_never_capped |
+| R12 | Every channel has a label (source / copy / dead); only sources are read; alerts are channels | D20, D30, D40 | tests/test_inventory.py::test_r12_only_sources_are_read_and_every_channel_needs_a_label |
+| R13 | The morning skill reads the calendar first, asks mode and hours, and asks (never proposes) the priority | D12, D19 | tests/test_inventory.py::test_r13_skill_text_keeps_the_order_and_the_never_rules |
 | R14 | A task cannot start with an incomplete card | D10, D37, D47 | tests/test_writer.py::test_r14_incomplete_card_cannot_start |
 | R15 | The active task is injected as context in interactive sessions, never in `claude -p` | D37, D8 | pending: P3 |
 | R16 | Start, pause and done can be said in any session's chat and reach the writer | D21, D23, D47 | pending: P3 |
@@ -33,7 +33,7 @@ piece that owns it is being built.
 | R21 | The close sends tasks through each project's entry command; projects without one go to the holding list | D27, D34 | pending: P4 |
 | R22 | Close-time sorting applies the purpose rule (task vs content), one place per item | D32 | pending: P4 |
 | R23 | Library items untouched for 5 weeks ask for a decision, one per close | D33 | pending: P4 |
-| R24 | Two old items a day are offered in the sheet | D31 | pending: P2 |
+| R24 | Two old items a day are offered in the sheet | D31 | tests/test_inventory.py::test_r24_two_old_items_are_offered_and_rotate |
 | R25 | Breaks: technique and phone check logged; timer survives a reload | D50, D22 | pending: P3 |
 | R26 | Recap on demand and after a pause | D8 | pending: P3 |
 | R27 | Token usage logged per turn with an active task; total per task in the view | D39 | pending: P3 |

@@ -1,26 +1,91 @@
-# Every place where work for you piles up (D20). label: source (read) | copy (ignored) | dead
-# reader: how the inventory reads it. new_by: what identifies an item, to tell what is new.
+# Every place where work for you piles up (D20). The morning inventory reads this file.
+#
+# label   source (read every morning) | copy (a copy of another channel: ignored)
+#         | dead (emptied once into its source, then archived: ignored)        (D40)
+# why     one line: why this label. Copies and dead channels are listed with it.
+# reader  markdown_rows | json_items | file_count  (options in routine/inventory.py)
+# new_by  row_id (default: the id the source gives the item) | text (a hash of its title)
+# never_capped  true: every new item is shown, never truncated (opportunities, D5)
+# old     true: this channel's oldest pending items can be offered as "old items" (D31)
+#
+# Optional settings for the whole inventory:
+[settings]
+max_new = 10            # new items shown per channel, unless never_capped
+old_per_day = 2         # old items offered each morning (D31)
+old_cooldown_days = 7   # an old item offered is not offered again for this many days
+
+# A ledger whose open rows are table rows marked ⬜: | id | title | ... | ⬜ |
 [[channel]]
 id = "ledger"
 title = "Project ledger"
 label = "source"
+why = "the only list of the project's open tasks"
 reader = "markdown_rows"
-path = "~/projects/example/TODO.md"
+item = "table"
 pending = "⬜"
-new_by = "row_id"
+path = "~/projects/example/TODO.md"
+old = true
 
+# A ledger of cards: a "### ID — what" heading followed by an open checkbox.
+[[channel]]
+id = "cards"
+title = "Cards waiting for a decision"
+label = "source"
+why = "written only through the project's entry command"
+reader = "markdown_rows"
+item = "checkbox"
+path = "~/projects/example/PENDING.md"
+born = 'born: (\d{4}-\d{2}-\d{2})'
+old = true
+
+# A JSON queue: the opportunities that still have no score.
 [[channel]]
 id = "opportunities"
 title = "Opportunities without a score"
 label = "source"
+why = "the queue file is the source; its markdown view is generated from it"
 reader = "json_items"
 path = "~/projects/example/queue.json"
-filter = { score = "null" }
-new_by = "id"
+items = "rows"
+where = ["score is null", "status != \"discarded\""]
+item_title = "{what}"
 never_capped = true
+
+# Alerts are channels too (D30): a map of open warnings with the date they started.
+[[channel]]
+id = "alerts"
+title = "Open health-check warnings"
+label = "source"
+why = "written by the health check; nobody else keeps this list"
+reader = "json_items"
+path = "~/projects/example/warnings.json"
+items = "warnings"
+where = ["resolved is null"]
+item_title = "{key}"
+item_born = "{since}"
+old = true
+
+# Files a watcher drops in a folder, one per finding.
+[[channel]]
+id = "to_review"
+title = "Findings to review"
+label = "source"
+why = "the watcher writes one file per finding here and nowhere else"
+reader = "file_count"
+path = "~/projects/example/to-review"
+glob = "*.md"
+never_capped = true
+
+[[channel]]
+id = "queue_view"
+title = "Generated view of the queue"
+label = "copy"
+why = "generated from queue.json"
+path = "~/projects/example/QUEUE.md"
 
 [[channel]]
 id = "old_list"
 title = "Old tracking list"
 label = "dead"
+why = "replaced by the queue; its rows were moved there"
 path = "~/projects/example/OLD_LIST.md"
