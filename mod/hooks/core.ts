@@ -186,6 +186,36 @@ export function taskList(today: Today): string {
     .join('\n')
 }
 
+export type TaskRow = {
+  id: string
+  alias: string
+  mark: string
+  title: string
+  doneWhen?: string
+  firstStep?: string
+  carried: number
+  /** What the row offers: start a pending or paused task, finish the active one. */
+  action: 'start' | 'done' | null
+}
+
+/** Today's full list for the pane, in today's order (the expanded band). */
+export function taskRows(today: Today): TaskRow[] {
+  return today.order.map((id, n) => {
+    const t = today.tasks[id]
+    const status = t?.status ?? 'pending'
+    return {
+      id,
+      alias: `T${n + 1}`,
+      mark: MARK[status],
+      title: t?.title ?? id,
+      doneWhen: t?.done_when,
+      firstStep: t?.first_step,
+      carried: t?.carried ?? 0,
+      action: status === 'active' ? 'done' : status === 'pending' || status === 'paused' ? 'start' : null,
+    }
+  })
+}
+
 /**
  * Where the task's drift episode stands, as the writer folded it (D9, D54): a
  * warning waiting for the user's answer, the user already justified staying, or

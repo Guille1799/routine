@@ -8,7 +8,8 @@ the contracts it relies on in [`docs/INTERFACES.md`](../docs/INTERFACES.md).
 
 | Where | What |
 |---|---|
-| Band above the prompt | `date · n of m done · T2 <task> · 41m · [Pause] [Done] [Break] [Recap] · data 09:41`. The last part is the time of the data it read (`last_ts`). A missing data folder or diary is said there, never thrown |
+| Band above the prompt | `date · n of m done · T2 <task> · 41m · [Pause] [Done] [Break] [Recap] [Tasks] · data 09:41`. The last part is the time of the data it read (`last_ts`). A missing data folder or diary is said there, never thrown |
+| Tasks pane | The band's `Tasks` button opens a pane with today's full list: status mark, title, done when, first step, carried counter, and the inbox count. `Start` on pending and paused tasks, `Done` on the active one (the same writer calls and done row as the band) |
 | Every prompt | The active task's card, its perimeter and the drift rule go to the model as hidden context, read when the prompt is sent (`prompt.submit`, not the system prompt, so the prompt cache is kept) |
 | Tool `routine` | The model calls it when you say "let's do T2", "pause", "done", when a message drifts off the perimeter (warned once), to capture to the inbox, or to keep something you said. "T2" is the 2nd task in today's order |
 | Done | One step: one row per configured field (`config/done_fields.toml`) and one note the session drafts and you correct. From chat, the tool asks only for the missing required fields |
