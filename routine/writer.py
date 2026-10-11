@@ -162,6 +162,14 @@ def record(root: Path, etype: str, data: dict | None = None, task: str | None = 
                     written.append(_event("pause", today,
                                           {"note": "auto-paused: another task started"},
                                           task=st["active"], session=session, cwd=cwd))
+            if etype == "drift_warn":  # warn once per drift episode (D9, D54)
+                dr = st["drift"].get(task)
+                if dr and dr["open"]:
+                    raise RuleError("this task already has an unanswered drift warning")
+                if dr and dr["replies"] and dr["replies"][-1].get("action") == "continue":
+                    raise RuleError("the user already justified staying on this; no new warning")
+            if etype == "drift_reply" and not (st["drift"].get(task) or {}).get("open"):
+                raise RuleError("there is no open drift warning to answer")
             if etype == "inbox" and "id" not in data:
                 data["id"] = f"i-{secrets.token_hex(4)}"
             if etype == "inbox_sorted" and data.get("item") not in st["inbox"]:

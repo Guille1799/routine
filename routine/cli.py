@@ -4,6 +4,7 @@ session through Bash) uses this, never the files directly.
     python -m routine <action> [--task ID] [--data JSON] [--session ID] [--cwd PATH]
     python -m routine status      # prints today.json
     python -m routine view        # prints the day as markdown
+    python -m routine fields      # prints config/done_fields.toml as JSON
 
 Output is JSON on stdout. Exit codes: 0 written · 1 refused (nothing written) ·
 2 no data folder.
@@ -14,7 +15,7 @@ import argparse
 import json
 import sys
 
-from . import events, paths, state, view, writer
+from . import config, events, paths, state, view, writer
 
 ACTIONS = sorted(t.replace("_", "-") for t in events.TYPES)
 
@@ -22,7 +23,7 @@ ACTIONS = sorted(t.replace("_", "-") for t in events.TYPES)
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="routine", description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("action", choices=ACTIONS + ["status", "view"])
+    p.add_argument("action", choices=ACTIONS + ["status", "view", "fields"])
     p.add_argument("--task")
     p.add_argument("--data", default="{}", help="JSON object with the event fields")
     p.add_argument("--session")
@@ -36,6 +37,14 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     if args.action == "status":
         print(json.dumps(state.current(root), ensure_ascii=False, indent=2))
+        return 0
+    if args.action == "fields":
+        try:
+            fields = config.done_fields(root)
+        except config.ConfigError as exc:
+            print(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False))
+            return 1
+        print(json.dumps({"ok": True, "fields": fields}, ensure_ascii=False))
         return 0
     if args.action == "view":
         st = state.current(root)

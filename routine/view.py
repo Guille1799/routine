@@ -18,6 +18,8 @@ def render(st: dict) -> str:
         for key in ("done_when", "first_step", "perimeter"):
             if t.get(key):
                 out.append(f"  - {key.replace('_', ' ')}: {t[key]}")
+        if t.get("tokens"):
+            out.append(f"  - tokens: {t['tokens']['input']} in / {t['tokens']['output']} out")
         if t.get("notes"):
             out.append(f"  - last note: {t['notes'][-1]}")
     if st["inbox"]:

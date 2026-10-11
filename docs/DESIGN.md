@@ -41,7 +41,9 @@ previous one is closed (D24).
 - The session the user writes in judges whether a message fits the active task, using
   the task's **perimeter** (D16 → D37). Example perimeter for a reading: questions about
   the text, unknown terms, links to my project; anything else is drift.
-- It warns **once**. The user goes back, or continues and writes why (D9). Both are logged.
+- It warns **once per drift episode** (D9, D54): no new warning while one is unanswered, nor after
+  the user justified staying; after going back, a new drift can be warned. The user goes back,
+  or continues and writes why. Both are logged.
 - Two cheap calibrations (D37): a one-tap "did I drift?" when a task is done, and the
   folder each session works in as an objective signal.
 - **Zero warnings is recorded as "not measured", never as "no drift"** (pre-mortem).
@@ -167,3 +169,4 @@ not decided (D48).
 | D51 | current | phone and distractions check when a task is done |
 | D52 | current | done in one step; its fields are configurable |
 | D53 | process | build go-ahead |
+| D54 | current | drift is warned once per episode: no new warning while one is open or after the user justified staying; after "back", a new drift can be warned |

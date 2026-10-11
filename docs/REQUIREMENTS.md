@@ -27,7 +27,7 @@ piece that owns it is being built.
 | R15 | The active task is injected as context in interactive sessions, never in `claude -p` | D37, D8 | pending: P3 |
 | R16 | Start, pause and done can be said in any session's chat and reach the writer | D21, D23, D47 | pending: P3 |
 | R17 | The band shows task, time, buttons and the time of the data it read | D8, D38, D6 | pending: P3 |
-| R18 | Drift is warned once per task; continuing requires a reason; both are logged | D9, D37 | tests/test_writer.py::test_r18_continuing_after_a_drift_warning_needs_a_reason |
+| R18 | Drift is warned once per episode; continuing requires a reason; both are logged | D9, D37, D54 | tests/test_writer.py::test_r18_continuing_after_a_drift_warning_needs_a_reason |
 | R19 | Done is one step with the configured fields; missing required fields are asked | D14, D17, D42, D43, D51, D23 | pending: P3 |
 | R20 | `/inbox <text>` captures without leaving the task | D26 | pending: P3 |
 | R21 | The close sends tasks through each project's entry command; projects without one go to the holding list | D27, D34 | pending: P4 |

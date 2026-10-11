@@ -47,6 +47,7 @@ def fold(events: list[dict]) -> dict:
             st["order"].append(tid)
         elif t == "start":
             st["tasks"][tid]["status"] = "active"
+            st["tasks"][tid]["since"] = ev["ts"]
             st["active"] = tid
         elif t in ("pause", "done", "drop"):
             task = st["tasks"][tid]
@@ -55,17 +56,27 @@ def fold(events: list[dict]) -> dict:
                 task["notes"].append(d["note"])
             if t == "done":
                 task["done"] = d.get("fields", {})
+            task.pop("since", None)
             if st["active"] == tid:
                 st["active"] = None
+        elif t == "usage" and tid in st["tasks"]:
+            tok = st["tasks"][tid].setdefault("tokens", {"input": 0, "output": 0})
+            tok["input"] += (d.get("input_tokens", 0) + d.get("cache_read_input_tokens", 0)
+                             + d.get("cache_creation_input_tokens", 0))
+            tok["output"] += d.get("output_tokens", 0)
         elif t == "inbox":
             st["inbox"][ev.get("data", {}).get("id") or ev["ts"]] = {
                 "text": d["text"], "since": d.get("since", ev["ts"])}
         elif t == "inbox_sorted":
             st["inbox"].pop(d["item"], None)
         elif t == "drift_warn":
-            st["drift"].setdefault(tid, {"warned": 0, "replies": []})["warned"] += 1
+            dr = st["drift"].setdefault(tid, {"warned": 0, "replies": [], "open": False})
+            dr["warned"] += 1
+            dr["open"] = True
         elif t == "drift_reply":
-            st["drift"].setdefault(tid, {"warned": 0, "replies": []})["replies"].append(d)
+            dr = st["drift"].setdefault(tid, {"warned": 0, "replies": [], "open": False})
+            dr["replies"].append(d)
+            dr["open"] = False
         elif t == "break_start":
             st["break"] = {"technique": d["technique"], "minutes": d.get("minutes"),
                            "since": ev["ts"]}
