@@ -66,6 +66,34 @@ def test_r6_starting_a_task_pauses_the_active_one(root):
     assert st["tasks"][a]["status"] == "paused"
 
 
+def test_r17_last_paused_is_the_task_the_band_offers_to_resume(root):
+    writer.record(root, "open_day", {"mode": "normal"}, day="2026-10-12")
+    a, b = add(root), add(root, title="Python exercise")
+    writer.record(root, "start", task=a)
+    writer.record(root, "pause", task=a)
+    assert state.current(root)["last_paused"] == a
+    writer.record(root, "start", task=b)       # starting another keeps a as the one to resume
+    writer.record(root, "pause", task=b)
+    assert state.current(root)["last_paused"] == b
+    writer.record(root, "start", task=b)       # resumed: nothing left to offer
+    assert state.current(root)["last_paused"] is None
+
+
+def test_r17_refresh_rebuilds_a_stale_copy_without_writing_an_event(root):
+    writer.record(root, "open_day", {"mode": "normal"}, day="2026-10-12")
+    a = add(root)
+    writer.record(root, "start", task=a)
+    writer.record(root, "pause", task=a)
+    snap = paths.state_file(root)
+    stale = json.loads(snap.read_text(encoding="utf-8"))
+    del stale["last_paused"]                    # as older code wrote it
+    snap.write_text(json.dumps(stale), encoding="utf-8")
+    diary = paths.diary_file(root, "2026-10-12").read_text(encoding="utf-8")
+    writer.refresh(root)
+    assert json.loads(snap.read_text(encoding="utf-8"))["last_paused"] == a
+    assert paths.diary_file(root, "2026-10-12").read_text(encoding="utf-8") == diary
+
+
 def test_r14_incomplete_card_cannot_start(root):
     writer.record(root, "open_day", {"mode": "normal"}, day="2026-10-12")
     t = add(root, perimeter="")

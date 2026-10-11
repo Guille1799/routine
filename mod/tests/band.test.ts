@@ -2,7 +2,7 @@
 import { expect, test } from 'claude-code/testing'
 
 import { WRITER_CALLS as C } from '../hooks/contract'
-import { BAND_PROPS, OPTIONS, START, argvOf, today, world, writes } from './world'
+import { BAND_PROPS, OPTIONS, START, argvOf, refreshes, today, world, writes } from './world'
 
 const SURFACES = ['terminal', 'desktop'] as const
 const BAND = { plugin: 'routine', component: 'AbovePrompt', props: BAND_PROPS } as const
@@ -55,6 +55,27 @@ test('R17: the band re-reads today.json on every draw', { options: OPTIONS }, as
   const line = await text(ui)
   expect(line).toContain('no active task')
   expect(line).toContain('data 09:45')
+})
+
+test('R17: with no active task the band offers to resume the task paused last', { options: OPTIONS }, async ($, on) => {
+  const SECOND = 't-20261012-bbbbbb'
+  const paused = { ...today().tasks[SECOND]!, status: 'paused' as const, since: undefined }
+  const w = world(on, { today: today({ active: null, last_paused: SECOND, tasks: { ...today().tasks, [SECOND]: paused } }) })
+  await $.session.start(START)
+  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  const line = await text(ui)
+  expect(line).toContain('T2 Read section 3 · paused')
+  expect(line).toContain('[Resume]')
+  expect(line).not.toContain('[Pause]')
+  await ui.press({ key: 'resume' })
+  expect(writes(w)).toEqual([argvOf(C.start!, SECOND)])
+})
+
+test('R17: every load rebuilds today.json from the diary, so a copy from older code cannot outlive it', { options: OPTIONS }, async ($, on) => {
+  const w = world(on)
+  await $.session.start(START)
+  expect(refreshes(w)).toHaveLength(1)
+  expect(writes(w)).toEqual([]) // a rebuild writes no event
 })
 
 test('R17/R30: a missing data folder is said on the band, never thrown', { options: OPTIONS }, async ($, on) => {

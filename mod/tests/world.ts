@@ -82,9 +82,14 @@ export function argvOf(call: WriterCall, task?: string): string[] {
   })
 }
 
-/** Writer runs only: the `fields` reads left out. */
+/** Writer runs only: the `fields` reads and the load-time `refresh` left out. */
 export function writes(w: World): string[][] {
-  return w.runs.filter(a => a[3] !== 'fields')
+  return w.runs.filter(a => a[3] !== 'fields' && a[3] !== 'refresh')
+}
+
+/** The load-time rebuilds of today.json. */
+export function refreshes(w: World): string[][] {
+  return w.runs.filter(a => a[3] === 'refresh')
 }
 
 /** The engine hands paths in the platform's spelling. */

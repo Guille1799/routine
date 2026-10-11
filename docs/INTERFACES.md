@@ -50,8 +50,9 @@ the position in today's order. Card fields: `title`, `done_when`, `first_step`,
 ## 5 · Read model
 
 `state/today.json` is rewritten by the writer after every event: `day, open, closed, mode,
-hours, tasks{id: card+status+carried+notes}, order, active, inbox{id: text, since}, break,
-drift, tomorrow, last_ts`. Readers never write it. The band shows `last_ts` (D38).
+hours, tasks{id: card+status+carried+notes}, order, active, last_paused, inbox{id: text,
+since}, break, drift, tomorrow, last_ts`. Readers never write it. The band shows `last_ts`
+(D38). `last_paused` is the task paused last while it stays paused: the band's Resume.
 
 ## 6 · Inventory (P2 → morning skill)
 

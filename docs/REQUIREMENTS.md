@@ -58,6 +58,8 @@ piece that owns it is being built.
 - D48: proposed, not decided.
 - D49: a user habit, not system behaviour.
 - D53: a process decision (go-ahead to build).
+- D55: a principle that judges every visible change, not one behaviour.
+- D56: decided but not built yet, and partly open (button count, prompt lock); it gets its requirements when it is built.
 
 ## Pieces
 

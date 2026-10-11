@@ -204,6 +204,24 @@ async function endBreak($: $, phone: boolean): Promise<void> {
   await recap($)
 }
 
+/**
+ * Rebuild today.json from the diary at every load: the band reads that copy, and a copy
+ * folded by older code (before a field existed) must not outlive a code change.
+ */
+async function refreshSnapshot($: $): Promise<void> {
+  const s = await settings($)
+  if (!s.dataDir) return
+  const env: Record<string, string> = { PYTHONIOENCODING: 'utf-8', PYTHONUTF8: '1', ROUTINE_DATA_DIR: s.dataDir }
+  try {
+    const ran = await $.process.run([s.python, '-m', 'routine', 'refresh'], { cwd: s.codeDir, env })
+    const answer = readWriterAnswer(ran.exitCode, ran.stdout, ran.stderr)
+    if (!answer.ok) $.ui.log(`routine: refresh failed: ${answer.error}`, { to: 'debug' })
+  } catch (err) {
+    $.ui.log(`routine: refresh did not run: ${String(err)}`, { to: 'debug' })
+  }
+  $.ui.invalidate('ui.render')
+}
+
 async function setup($: $): Promise<void> {
   if (isReady || !(await isInteractive($))) return
   isReady = true
@@ -240,6 +258,7 @@ async function setup($: $): Promise<void> {
     immediate: true,
   })
   $.clock.every(TICK_MS, () => void tick($))
+  await refreshSnapshot($)
 }
 
 async function tick($: $): Promise<void> {
@@ -258,7 +277,9 @@ async function capture($: $, text: string): Promise<string> {
   return out.ok ? 'Captured to the inbox.' : `Inbox: ${out.error}`
 }
 
-type BandElements = Pick<Elements['terminal' | 'desktop'], 'Box' | 'Text' | 'Button' | 'Input'>
+const PAUSE_REASONS = ['planned', 'interrupted', 'blocked', 'switched', 'low energy', 'lost focus', 'other']
+
+type BandElements =Pick<Elements['terminal' | 'desktop'], 'Box' | 'Text' | 'Button' | 'Input'>
 
 async function formRows($: $, f: RoutineForm, el: BandElements): Promise<RenderElement[]> {
   const { Box, Text, Button, Input } = el
@@ -278,6 +299,20 @@ async function formRows($: $, f: RoutineForm, el: BandElements): Promise<RenderE
     </Box>
   )
   if (f.kind === 'pause') {
+    // PREVIEW (D56): the reason row, only to see how it fits the band. Not saved yet.
+    rows.push(
+      <Box key="row-reason">
+        <Text>Why? </Text>
+        {PAUSE_REASONS.map((r, n) => (
+          <Button
+            key={`field-reason-${n}`}
+            label={r}
+            variant={f.values.reason === r ? 'primary' : undefined}
+            onPress={() => setValue('reason', r)}
+          />
+        ))}
+      </Box>,
+    )
     rows.push(noteInput('note', 'Pause note'))
   } else {
     const fields = await doneFields($)
@@ -482,9 +517,12 @@ export const register: Register = (on, options) => {
           <Text dimColor>{b.date} · {b.progress} · </Text>
           {b.task ? (
             <Text bold>{b.task.alias} {b.task.title}{b.task.elapsed ? ` · ${b.task.elapsed}` : ''} </Text>
+          ) : b.resume ? (
+            <Text dimColor>{b.resume.alias} {b.resume.title} · paused </Text>
           ) : (
             <Text dimColor>no active task </Text>
           )}
+          {b.resume && <Button key="resume" label="Resume" hotkey="s" variant="primary" onPress={() => startTask($, b.resume!.id)} />}
           {b.task && <Button key="pause" label="Pause" hotkey="p" onPress={() => openForm($, 'pause')} />}
           {b.task && <Button key="done" label="Done" hotkey="d" onPress={() => openForm($, 'done')} />}
           <Button

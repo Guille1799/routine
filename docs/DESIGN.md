@@ -4,6 +4,11 @@ A daily routine manager for people who work all day with Claude Code across many
 sessions. Its core idea fits in one line: **one active task at a time, and nothing gets
 lost.**
 
+**User experience comes first** (D55). The routine only works if it is used every day, so
+it must be quick, clear and friendly. When a feature can be complete or easy to use, ease
+of use wins: fewer, clearer options over complete but crowded ones. Every change to what
+the user sees is judged against this before it ships.
+
 This file says what holds **today**. Each rule carries the id of the decision behind it
 (`D10`). Superseded decisions stay in the index at the end, marked, so the history is
 traceable without reading as current. Requirements and their tests live in
@@ -34,6 +39,13 @@ previous one is closed (D24).
   with an incomplete card.
 - **Pause and done write a note**: what was done, where I stopped, next step (D47). That
   note is the checkpoint whoever resumes the task reads first.
+- **Pause stops the task at the click** (D56). After that the user picks **why** they
+  paused from buttons only, no free text, so the reasons can be counted later: planned,
+  interrupted, blocked, switched, low energy, lost focus, other. "Other" is the check on
+  the list: if it gets more than one pause in ten, the list is wrong. The reason is focus
+  data (D44). A separate **save work** step writes the checkpoint note above, drafted by
+  the session, for when the user leaves the session. Open: whether seven buttons fit the
+  band or it drops to four (D55), and whether the prompt can be locked while paused.
 - **Carried tasks keep their id** and a counter of how many days they carried (D28).
 
 ## 3 · Drift (staying on the task)
@@ -170,3 +182,5 @@ not decided (D48).
 | D52 | current | done in one step; its fields are configurable |
 | D53 | process | build go-ahead |
 | D54 | current | drift is warned once per episode: no new warning while one is open or after the user justified staying; after "back", a new drift can be warned |
+| D55 | principle | user experience comes first: quick, clear and friendly beats complete; every visible change is judged against it |
+| D56 | current, partly open | pause stops at the click; the reason is picked from buttons only; a separate "save work" writes the drafted checkpoint note |

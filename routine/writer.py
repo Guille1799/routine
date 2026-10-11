@@ -178,3 +178,13 @@ def record(root: Path, etype: str, data: dict | None = None, task: str | None = 
         _append(root, written)
         state.write_snapshot(root, state.current(root))
         return written
+
+
+def refresh(root: Path) -> None:
+    """Rebuild today.json from the diary, writing no event.
+
+    The mod calls it every time it loads, so a copy folded by older code cannot outlive
+    a code change. Under the lock, so it never overwrites a newer copy a writer just made.
+    """
+    with locked(root):
+        state.write_snapshot(root, state.current(root))

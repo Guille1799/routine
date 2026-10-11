@@ -26,6 +26,8 @@ export type Today = {
   tasks: Record<string, Card>
   order: string[]
   active: string | null
+  /** The task paused last, while it stays paused: what the band offers to resume. */
+  last_paused?: string | null
   inbox: Record<string, { text: string; since: string }>
   break: { technique: string; minutes?: number | null; since: string } | null
   drift: Record<string, { warned: number; replies: { action: string; why?: string }[]; open?: boolean }>
@@ -146,6 +148,8 @@ export type Band = {
   date: string
   progress: string
   task?: { alias: string; title: string; elapsed?: string; breakDue: boolean }
+  /** With no active task, the task paused last: the band offers Resume. */
+  resume?: { id: string; alias: string; title: string }
   break?: { leftMin: number; isOver: boolean }
   asOf: string
 }
@@ -172,6 +176,9 @@ export function band(today: Today, nowMs: number): Band {
       elapsed: min === undefined ? undefined : formatMinutes(min),
       breakDue: min !== undefined && min >= POMODORO_WORK_MIN,
     }
+  } else if (today.last_paused && today.tasks[today.last_paused]?.status === 'paused') {
+    const id = today.last_paused
+    out.resume = { id, alias: aliasOf(today, id), title: today.tasks[id]?.title ?? id }
   }
   return out
 }

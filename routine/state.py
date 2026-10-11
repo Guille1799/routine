@@ -27,7 +27,7 @@ def fold(events: list[dict]) -> dict:
     """Return the state of one day: tasks, active task, inbox, break, open/closed."""
     st: dict = {
         "day": None, "open": False, "closed": False, "mode": None, "hours": None,
-        "tasks": {}, "order": [], "active": None, "inbox": {}, "break": None,
+        "tasks": {}, "order": [], "active": None, "last_paused": None, "inbox": {}, "break": None,
         "drift": {}, "tomorrow": None, "last_ts": None,
     }
     for ev in events:
@@ -49,6 +49,8 @@ def fold(events: list[dict]) -> dict:
             st["tasks"][tid]["status"] = "active"
             st["tasks"][tid]["since"] = ev["ts"]
             st["active"] = tid
+            if st["last_paused"] == tid:
+                st["last_paused"] = None
         elif t in ("pause", "done", "drop"):
             task = st["tasks"][tid]
             task["status"] = {"pause": "paused", "done": "done", "drop": "dropped"}[t]
@@ -59,6 +61,11 @@ def fold(events: list[dict]) -> dict:
             task.pop("since", None)
             if st["active"] == tid:
                 st["active"] = None
+            # the task the band offers to resume: the last one paused, while it is still paused
+            if t == "pause":
+                st["last_paused"] = tid
+            elif st["last_paused"] == tid:
+                st["last_paused"] = None
         elif t == "usage" and tid in st["tasks"]:
             tok = st["tasks"][tid].setdefault("tokens", {"input": 0, "output": 0})
             tok["input"] += (d.get("input_tokens", 0) + d.get("cache_read_input_tokens", 0)
