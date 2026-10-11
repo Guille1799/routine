@@ -48,10 +48,14 @@ skill was copied instead of linked: ask the user for the path of their routine c
 ## Step 1 · Close yesterday, if it is still open (D24, D28)
 
 Run `python -m routine status`. If `open` is true and `day` is before today, yesterday was
-never closed, and today cannot open until it is. Tell the user in one line, then go through
-each **unfinished** task (status not `done` or `dropped`), **one per message**:
+never closed, and today cannot open until it is. Tell the user in one line, list the
+**unfinished** tasks (status not `done` or `dropped`) in one message, and ask once:
 
-> "<task title>": tomorrow, to a project ledger, or drop?
+> These go to tomorrow unless you want to move or drop any.
+
+**Tomorrow is the default**: if the user names no task, or just says to close, every
+unfinished task goes to tomorrow. Never ask task by task. Only the tasks the user names
+get one of the other two:
 
 - **tomorrow** → nothing to write: unfinished tasks carry over by themselves, same id.
 - **ledger** → read `<data>/config/projects.toml`. If the task's project has an `entry`,
