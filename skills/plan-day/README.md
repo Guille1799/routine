@@ -24,7 +24,7 @@ Two parts: a **Windows scheduled task** that prepares the inventory before you a
 3. **The skill**, as a link (not a copy: the skill finds the CLI two folders above itself):
 
    ```powershell
-   New-Item -ItemType Junction -Path "$HOME\.claude\skills\morning" -Target "<repo>\skills\morning"
+   New-Item -ItemType Junction -Path "$HOME\.claude\skills\plan-day" -Target "<repo>\skills\plan-day"
    ```
 
    ```bash
