@@ -24,18 +24,18 @@ piece that owns it is being built.
 | R12 | Every channel has a label (source / copy / dead); only sources are read; alerts are channels | D20, D30, D40 | pending: P2 |
 | R13 | The morning skill reads the calendar first, asks mode and hours, and asks (never proposes) the priority | D12, D19 | pending: P2 |
 | R14 | A task cannot start with an incomplete card | D10, D37, D47 | tests/test_writer.py::test_r14_incomplete_card_cannot_start |
-| R15 | The active task is injected as context in interactive sessions, never in `claude -p` | D37, D8 | pending: P3 |
-| R16 | Start, pause and done can be said in any session's chat and reach the writer | D21, D23, D47 | pending: P3 |
+| R15 | The active task is injected as context in interactive sessions, never in `claude -p` | D37, D8 | tests/test_mod.py::test_r15_task_context_only_in_interactive_sessions |
+| R16 | Start, pause and done can be said in any session's chat and reach the writer | D21, D23, D47 | tests/test_mod_contract.py::test_r16_every_call_the_mod_makes_is_written_by_the_real_writer |
 | R17 | The band shows task, time, buttons and the time of the data it read | D8, D38, D6 | pending: P3 |
 | R18 | Drift is warned once per task; continuing requires a reason; both are logged | D9, D37 | tests/test_writer.py::test_r18_continuing_after_a_drift_warning_needs_a_reason |
 | R19 | Done is one step with the configured fields; missing required fields are asked | D14, D17, D42, D43, D51, D23 | pending: P3 |
-| R20 | `/inbox <text>` captures without leaving the task | D26 | pending: P3 |
+| R20 | `/inbox <text>` captures without leaving the task | D26 | tests/test_mod.py::test_r20_inbox_without_a_model_turn |
 | R21 | The close sends tasks through each project's entry command; projects without one go to the holding list | D27, D34 | pending: P4 |
 | R22 | Close-time sorting applies the purpose rule (task vs content), one place per item | D32 | pending: P4 |
 | R23 | Library items untouched for 5 weeks ask for a decision, one per close | D33 | pending: P4 |
 | R24 | Two old items a day are offered in the sheet | D31 | pending: P2 |
-| R25 | Breaks: technique and phone check logged; timer survives a reload | D50, D22 | pending: P3 |
-| R26 | Recap on demand and after a pause | D8 | pending: P3 |
+| R25 | Breaks: technique and phone check logged; timer survives a reload | D50, D22 | tests/test_mod.py::test_r25_breaks_logged_and_timer_survives_reload |
+| R26 | Recap on demand and after a pause | D8 | tests/test_mod.py::test_r26_recap_on_demand_and_after_a_break |
 | R27 | Token usage logged per turn with an active task; total per task in the view | D39 | pending: P3 |
 | R28 | Focus data is never stored as reusable text | D44 | tests/test_writer.py::test_r28_attention_data_never_becomes_reusable_text |
 | R29 | Fulfilled-day rate computed as priority done + day closed, over counted days | D41, D7 | pending: P4 |
