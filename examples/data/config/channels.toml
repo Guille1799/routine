@@ -1,0 +1,26 @@
+# Every place where work for you piles up (D20). label: source (read) | copy (ignored) | dead
+# reader: how the inventory reads it. new_by: what identifies an item, to tell what is new.
+[[channel]]
+id = "ledger"
+title = "Project ledger"
+label = "source"
+reader = "markdown_rows"
+path = "~/projects/example/TODO.md"
+pending = "⬜"
+new_by = "row_id"
+
+[[channel]]
+id = "opportunities"
+title = "Opportunities without a score"
+label = "source"
+reader = "json_items"
+path = "~/projects/example/queue.json"
+filter = { score = "null" }
+new_by = "id"
+never_capped = true
+
+[[channel]]
+id = "old_list"
+title = "Old tracking list"
+label = "dead"
+path = "~/projects/example/OLD_LIST.md"

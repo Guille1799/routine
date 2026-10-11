@@ -1,0 +1,6 @@
+# Each project's entry command for its ledger (D27). A project without one is not a valid
+# destination: items go to the holding list instead (D34).
+[[project]]
+id = "example"
+path = "~/projects/example"
+entry = "python bin/add.py {title} --what {what}"

@@ -1,0 +1,32 @@
+# The fields of the "done" step (D52). Add, remove or reorder freely: the code reads this file.
+# kind: buttons (pick one of `options`) | yesno | text
+[[field]]
+id = "rating"
+label = "How was it?"
+kind = "buttons"
+options = ["🔥", "😐", "🥱"]
+required = true
+
+[[field]]
+id = "learned_how"
+label = "How did you learn?"
+kind = "buttons"
+options = ["reading", "doing it with Claude", "video", "Claude quizzed me"]
+
+[[field]]
+id = "drifted"
+label = "Did you drift?"
+kind = "yesno"
+required = true
+
+[[field]]
+id = "phone"
+label = "Phone or distractions?"
+kind = "yesno"
+
+[[field]]
+id = "note"
+label = "Done / stopped at / next / I take away"
+kind = "text"
+prefill = "session"   # the session drafts it, the user corrects it
+required = true
