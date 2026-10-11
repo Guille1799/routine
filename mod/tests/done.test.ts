@@ -94,16 +94,26 @@ test('R16: pause from the band writes the drafted note the user corrected', { op
   expect(writes(w)).toEqual([argvOf(C.pause!, ACTIVE)])
 })
 
-test('R18: the drift warning is logged once per task, and the reply is logged', { options: OPTIONS }, async ($, on) => {
+test('R18: the drift warning and the reply reach the writer, and the writer refusal reaches the model', { options: OPTIONS }, async ($, on) => {
   const w = world(on)
   await $.session.start(START)
   await $.tool.call({ tool: TOOL, action: 'drift_warn', ...C.drift_warn!.data } as never)
   await $.tool.call({ tool: TOOL, action: 'drift_reply', reply: 'continue', why: 'it is related after all' } as never)
   expect(writes(w)).toEqual([argvOf(C.drift_warn!, ACTIVE), argvOf(C.drift_reply!, ACTIVE)])
-  w.today = today({ drift: { [ACTIVE]: { warned: 1, replies: [{ action: 'continue', why: 'x' }] } } })
+  w.writerExit = 1 // the writer refuses a second warning (D54); the mod does not judge it
   const again = await $.tool.call({ tool: TOOL, action: 'drift_warn', message: 'something else' } as never)
-  expect(refusal(again)).toContain('already warned once')
-  expect(writes(w)).toHaveLength(2)
-  const sent = await $.prompt.submit(prompt('and another thing'))
-  expect((sent.context ?? []).join('\n')).toContain('already warned for this task. Do not warn again.')
+  expect(refusal(again)).toContain('refused by the writer')
+})
+
+test('R18: the context tells the model where the drift episode stands', { options: OPTIONS }, async ($, on) => {
+  const w = world(on)
+  await $.session.start(START)
+  const context = async () => ((await $.prompt.submit(prompt('and another thing'))).context ?? []).join('\n')
+  expect(await context()).toContain('Warn once per drift')
+  w.today = today({ drift: { [ACTIVE]: { warned: 1, replies: [], open: true } } })
+  expect(await context()).toContain('a warning is open')
+  w.today = today({ drift: { [ACTIVE]: { warned: 1, replies: [{ action: 'continue', why: 'x' }], open: false } } })
+  expect(await context()).toContain('already justified staying on this. Do not warn again.')
+  w.today = today({ drift: { [ACTIVE]: { warned: 1, replies: [{ action: 'back' }], open: false } } })
+  expect(await context()).toContain('Warn once per drift')
 })

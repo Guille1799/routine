@@ -28,7 +28,7 @@ export type Today = {
   active: string | null
   inbox: Record<string, { text: string; since: string }>
   break: { technique: string; minutes?: number | null; since: string } | null
-  drift: Record<string, { warned: number; replies: { action: string; why?: string }[] }>
+  drift: Record<string, { warned: number; replies: { action: string; why?: string }[]; open?: boolean }>
   last_ts: string | null
 }
 
@@ -186,9 +186,16 @@ export function taskList(today: Today): string {
     .join('\n')
 }
 
-/** True when this task's drift warning was already given (R18: warned once). */
-export function driftWarned(today: Today, task: string): boolean {
-  return (today.drift[task]?.warned ?? 0) > 0
+/**
+ * Where the task's drift episode stands, as the writer folded it (D9, D54): a
+ * warning waiting for the user's answer, the user already justified staying, or
+ * clear. Only words for the model: the writer is the one that refuses.
+ */
+export function driftState(today: Today, task: string): 'open' | 'justified' | 'clear' {
+  const d = today.drift[task]
+  if (d?.open) return 'open'
+  if (d?.replies.at(-1)?.action === 'continue') return 'justified'
+  return 'clear'
 }
 
 /**
@@ -216,15 +223,21 @@ export function promptContext(today: Today, tool: string): string | undefined {
   )
   const note = card.notes?.at(-1) ?? card.last_note
   if (note) lines.push(`Last note: ${note}`)
-  if (driftWarned(today, id)) {
-    lines.push('Drift: already warned for this task. Do not warn again.')
+  const drift = driftState(today, id)
+  if (drift === 'open') {
+    lines.push(
+      'Drift: a warning is open. If this message answers it, call ' +
+        `${tool} with action "drift_reply": reply "back", or reply "continue" with why = their reason. Do not warn again.`,
+    )
+  } else if (drift === 'justified') {
+    lines.push('Drift: the user already justified staying on this. Do not warn again.')
   } else {
     lines.push(
       'Drift: if the user\'s message falls outside the perimeter, say so in ONE line before anything else and ' +
         `call ${tool} with action "drift_warn" and message = a short summary of the message. ` +
         'Then follow the user: going back → action "drift_reply" with reply "back"; ' +
         'continuing → action "drift_reply" with reply "continue" and why = their reason (ask for it in one line if they gave none). ' +
-        'Warn only once for this task.',
+        'Warn once per drift.',
     )
   }
   lines.push(

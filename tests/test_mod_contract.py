@@ -70,6 +70,14 @@ def test_r16_every_call_the_mod_makes_is_written_by_the_real_writer(data):
     for name in SCENARIO:
         done = run(argv(calls[name], task), data)
         assert done.returncode == 0, f"{name}: {done.stdout} {done.stderr}"
+        st = state.current(data)
+        if name == "start":  # the band's elapsed time reads it (R17)
+            assert st["tasks"][task]["since"] == json.loads(done.stdout)["events"][-1]["ts"]
+        if name == "usage":  # the per-task total (R27)
+            u = calls["usage"]["data"]
+            assert st["tasks"][task]["tokens"] == {
+                "input": u["input_tokens"] + u["cache_read_input_tokens"] + u["cache_creation_input_tokens"],
+                "output": u["output_tokens"]}
 
     st = state.current(data)
     assert st["tasks"][task]["status"] == "done"
@@ -78,3 +86,20 @@ def test_r16_every_call_the_mod_makes_is_written_by_the_real_writer(data):
     assert st["drift"][task]["warned"] == 1
     assert st["break"] is None
     assert [i["text"] for i in st["inbox"].values()] == ["buy milk"]
+
+
+def test_r32_the_fields_the_mod_reads_come_from_the_config(data):
+    """The mod reads `python -m routine fields` as {"fields": [{id, label, kind, options?,
+    required?, prefill?}]} (mod/hooks/core.ts DoneField); the example config must give that."""
+    (data / "config").mkdir()
+    example = REPO / "examples" / "data" / "config" / "done_fields.toml"
+    (data / "config" / "done_fields.toml").write_bytes(example.read_bytes())
+    out = run([sys.executable, "-m", "routine", "fields"], data)
+    assert out.returncode == 0, out.stdout
+    fields = json.loads(out.stdout)["fields"]
+    assert [f["id"] for f in fields] == ["rating", "learned_how", "drifted", "phone", "note"]
+    for f in fields:
+        assert isinstance(f["label"], str) and f["kind"] in ("buttons", "yesno", "text")
+    assert fields[-1]["prefill"] == "session"
+    # the done call in the contract carries exactly these fields
+    assert set(contract()["done"]["data"]["fields"]) == {f["id"] for f in fields}

@@ -128,7 +128,7 @@ export function world(on: On, over: Partial<World> = {}): World {
       value: { exitCode, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false },
     })
     if (argv[3] === 'fields') {
-      if (Array.isArray(w.fields)) return answer(0, JSON.stringify({ fields: w.fields }))
+      if (Array.isArray(w.fields)) return answer(0, JSON.stringify({ ok: true, fields: w.fields }))
       return answer(w.fields.exit, JSON.stringify({ ok: false, error: w.fields.error }))
     }
     if (w.writerExit !== 0) return answer(w.writerExit, JSON.stringify({ ok: false, error: 'refused by the writer' }))

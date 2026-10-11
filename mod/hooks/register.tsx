@@ -10,7 +10,6 @@ import {
   askFor,
   band,
   cleanFields,
-  driftWarned,
   inboxText,
   missingFields,
   promptContext,
@@ -400,7 +399,6 @@ export const register: Register = (on, options) => {
       }
       case 'drift_warn': {
         if (!today.active) return { deny: 'routine: no active task, so nothing to drift from' }
-        if (driftWarned(today, today.active)) return { deny: 'routine: already warned once for this task; do not warn again' }
         const message = s('message')?.trim()
         if (!message) return { deny: 'routine: drift_warn needs message' }
         return done(await write($, { action: 'drift_warn', task: today.active, data: { message } }), 'Drift warning logged. Ask: back to the task, or continue and why?')
