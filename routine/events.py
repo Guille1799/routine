@@ -25,7 +25,9 @@ TYPES: dict[str, tuple[tuple[str, ...], bool]] = {
     "task_add": (("title",), True),        # the task card: title, done_when, first_step, perimeter, kind, project
     "carry": (("carried",), True),         # an unfinished task moved into a new day
     "start": ((), True),
-    "pause": ((), True),                   # note: what was done, where I stopped, next step
+    "pause": ((), True),                   # at the click (D56); reason, and a note when said from chat
+    "pause_reason": (("reason",), True),   # why the open pause happened, one of PAUSE_REASONS (D56)
+    "checkpoint": (("note",), True),       # leaving: what was done, where I stopped, next step (D47, D56)
     "done": (("fields",), True),           # fields: the configurable done row (D52)
     "drop": ((), True),
     "inbox": (("text",), False),           # one capture point during the day (D26)
@@ -38,6 +40,10 @@ TYPES: dict[str, tuple[tuple[str, ...], bool]] = {
     "usage": (("input_tokens", "output_tokens"), False),
     "close_day": ((), False),              # tomorrow, decisions
 }
+
+# Why a pause happened, from buttons only so they can be counted (D56). No reason is
+# stored as no reason: "other" is the user's pick, never a default.
+PAUSE_REASONS = ("planned", "interrupted", "blocked", "switched", "low energy", "lost focus", "other")
 
 # Kinds that describe the user's attention never become reusable "said" text (D44).
 PRIVATE_SAID_KINDS = {"drift_reply", "mode", "attention"}
@@ -78,6 +84,10 @@ def validate(event: dict) -> dict:
         raise EventError(f"{etype} is missing: {', '.join(missing)}")
     if etype == "said" and data.get("kind") in PRIVATE_SAID_KINDS:
         raise EventError("attention data is never stored as reusable text")
+    if etype in ("pause", "pause_reason") and "reason" in data and data["reason"] not in PAUSE_REASONS:
+        raise EventError(f"unknown pause reason: {data['reason']!r}")
+    if etype == "checkpoint" and not str(data.get("note", "")).strip():
+        raise EventError("a checkpoint needs a note")
     if etype == "drift_reply" and data.get("action") not in ("back", "continue"):
         raise EventError("drift_reply action must be back or continue")
     if etype == "drift_reply" and data.get("action") == "continue" and not data.get("why"):

@@ -43,6 +43,7 @@ piece that owns it is being built.
 | R31 | Install and uninstall with demo data, leaving nothing behind | D45 | pending: P4 |
 | R32 | The done fields are read from the user's config, not the code | D52 | tests/test_writer.py::test_r32_done_fields_come_from_the_user_config |
 | R33 | The writer CLI has stable exit codes: 0 written, 1 refused, 2 no data folder | D35, D46 | tests/test_writer.py::test_cli_exit_codes |
+| R34 | Pause is written at the click; its reason comes from buttons only, starts as none and changes only while the pause lasts; leaving saves the context as its own step | D56 | tests/test_writer.py::test_r34_pause_stops_at_the_click_and_the_reason_is_set_while_it_lasts |
 
 ## Decisions without a requirement
 
@@ -59,7 +60,6 @@ piece that owns it is being built.
 - D49: a user habit, not system behaviour.
 - D53: a process decision (go-ahead to build).
 - D55: a principle that judges every visible change, not one behaviour.
-- D56: decided but not built yet, and partly open (button count, prompt lock); it gets its requirements when it is built.
 
 ## Pieces
 

@@ -64,8 +64,13 @@ def fold(events: list[dict]) -> dict:
             # the task the band offers to resume: the last one paused, while it is still paused
             if t == "pause":
                 st["last_paused"] = tid
+                task.setdefault("pauses", []).append({"at": ev["ts"], "reason": d.get("reason")})
             elif st["last_paused"] == tid:
                 st["last_paused"] = None
+        elif t == "pause_reason":
+            st["tasks"][tid]["pauses"][-1]["reason"] = d["reason"]
+        elif t == "checkpoint":
+            st["tasks"][tid]["notes"].append(d["note"])
         elif t == "usage" and tid in st["tasks"]:
             tok = st["tasks"][tid].setdefault("tokens", {"input": 0, "output": 0})
             tok["input"] += (d.get("input_tokens", 0) + d.get("cache_read_input_tokens", 0)

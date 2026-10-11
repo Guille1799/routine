@@ -7,6 +7,7 @@ import type { Elements, EngineInterface, PluginOptions, Register, RenderElement 
 import type { RoutineForm } from '../types'
 import {
   BREAKS,
+  PAUSE_REASONS,
   askFor,
   band,
   clockOf,
@@ -36,8 +37,8 @@ const RECAP_PROMPT =
   'Recap for the user coming back: in at most three short lines, where we were in this session ' +
   'and the next concrete step. Reply with the recap only.'
 const PAUSE_DRAFT_PROMPT =
-  'Draft the pause note for the routine task in this session, at most three short lines: ' +
-  'what was done, where it stopped, the next step. Reply with the note only.'
+  'Draft the context to resume the routine task in this session from another session, at most three ' +
+  'short lines: what was done, where it stopped, the next step. Reply with the context only.'
 const DONE_DRAFT_PROMPT =
   'Draft the closing note for the routine task in this session, at most four short lines: ' +
   'done / stopped at / next / what I take away. Reply with the note only.'
@@ -127,20 +128,42 @@ async function draftNote($: $, prompt: string): Promise<void> {
   await update($, form, f => (f ? { ...f, draft: text } : f))
 }
 
-async function openForm($: $, kind: RoutineForm['kind']): Promise<void> {
+/** Pause stops the task at the click (D56); the reason and the context to leave come after. */
+async function pauseNow($: $): Promise<void> {
   const r = await readToday($)
   if (!r.today?.active) {
     $.ui.toast(r.problem ?? 'No active task.')
     return
   }
-  const fields = kind === 'done' ? await doneFields($) : []
+  const task = r.today.active
+  const out = await write($, { action: 'pause', task })
+  if (!out.ok) {
+    $.ui.toast(`Pause: ${out.error}`)
+    return
+  }
+  await update($, form, () => ({ kind: 'pause', task, values: {}, draft: null, error: null }))
+  await draftNote($, PAUSE_DRAFT_PROMPT)
+}
+
+async function setReason($: $, task: string, reason: string): Promise<void> {
+  const out = await write($, { action: 'pause_reason', task, data: { reason } })
+  if (!out.ok) await update($, form, x => (x ? { ...x, error: out.error } : x))
+}
+
+async function openForm($: $, kind: 'done'): Promise<void> {
+  const r = await readToday($)
+  if (!r.today?.active) {
+    $.ui.toast(r.problem ?? 'No active task.')
+    return
+  }
+  const fields = await doneFields($)
   if (typeof fields === 'string') {
     $.ui.toast(fields)
     return
   }
-  const needsDraft = kind === 'pause' || fields.some(f => f.kind === 'text' && f.prefill === 'session')
+  const needsDraft = fields.some(f => f.kind === 'text' && f.prefill === 'session')
   await update($, form, () => ({ kind, task: r.today.active!, values: {}, draft: needsDraft ? null : '', error: null }))
-  if (needsDraft) await draftNote($, kind === 'pause' ? PAUSE_DRAFT_PROMPT : DONE_DRAFT_PROMPT)
+  if (needsDraft) await draftNote($, DONE_DRAFT_PROMPT)
 }
 
 async function saveForm($: $): Promise<void> {
@@ -149,10 +172,10 @@ async function saveForm($: $): Promise<void> {
   if (f.kind === 'pause') {
     const note = String(f.values.note ?? f.draft ?? '').trim()
     if (!note) {
-      await update($, form, x => (x ? { ...x, error: 'Write the note first.' } : x))
+      await update($, form, x => (x ? { ...x, error: 'Write the context first.' } : x))
       return
     }
-    const out = await write($, { action: 'pause', task: f.task, data: { note } })
+    const out = await write($, { action: 'checkpoint', task: f.task, data: { note } })
     return closeOrShow($, out)
   }
   const fields = await doneFields($)
@@ -185,7 +208,11 @@ async function closeOrShow($: $, out: WriterOutcome): Promise<void> {
 
 async function startTask($: $, task: string): Promise<void> {
   const out = await write($, { action: 'start', task })
-  if (!out.ok) $.ui.toast(`Start: ${out.error}`)
+  if (!out.ok) {
+    $.ui.toast(`Start: ${out.error}`)
+    return
+  }
+  await update($, form, f => (f?.kind === 'pause' ? null : f)) // the pause is over: its reason stays as it was
 }
 
 async function startBreak($: $, n: number): Promise<void> {
@@ -277,11 +304,13 @@ async function capture($: $, text: string): Promise<string> {
   return out.ok ? 'Captured to the inbox.' : `Inbox: ${out.error}`
 }
 
-const PAUSE_REASONS = ['planned', 'interrupted', 'blocked', 'switched', 'low energy', 'lost focus', 'other']
-
 type BandElements =Pick<Elements['terminal' | 'desktop'], 'Box' | 'Text' | 'Button' | 'Input'>
 
-async function formRows($: $, f: RoutineForm, el: BandElements): Promise<RenderElement[]> {
+/**
+ * The rows under the band line. `openPause` is the reason of the pause still open for the
+ * form's task (null: no reason yet), or undefined once that pause is over.
+ */
+async function formRows($: $, f: RoutineForm, el: BandElements, openPause: string | null | undefined): Promise<RenderElement[]> {
   const { Box, Text, Button, Input } = el
   const rows: RenderElement[] = []
   const setValue = (id: string, v: string | boolean) =>
@@ -299,7 +328,9 @@ async function formRows($: $, f: RoutineForm, el: BandElements): Promise<RenderE
     </Box>
   )
   if (f.kind === 'pause') {
-    // PREVIEW (D56): the reason row, only to see how it fits the band. Not saved yet.
+    if (openPause === undefined) return [] // resumed, here or elsewhere: nothing left to ask
+    // D56: the task already stopped at the click. Each pick is written at once and
+    // replaces the previous one; with no pick the pause keeps no reason.
     rows.push(
       <Box key="row-reason">
         <Text>Why? </Text>
@@ -307,13 +338,13 @@ async function formRows($: $, f: RoutineForm, el: BandElements): Promise<RenderE
           <Button
             key={`field-reason-${n}`}
             label={r}
-            variant={f.values.reason === r ? 'primary' : undefined}
-            onPress={() => setValue('reason', r)}
+            variant={openPause === r ? 'primary' : undefined}
+            onPress={() => setReason($, f.task, r)}
           />
         ))}
       </Box>,
     )
-    rows.push(noteInput('note', 'Pause note'))
+    rows.push(noteInput('note', 'Context to resume'))
   } else {
     const fields = await doneFields($)
     if (typeof fields === 'string') {
@@ -344,8 +375,8 @@ async function formRows($: $, f: RoutineForm, el: BandElements): Promise<RenderE
   }
   rows.push(
     <Box key="form-actions">
-      <Button key="save" label={f.kind === 'done' ? 'Save done' : 'Save pause'} variant="primary" onPress={() => saveForm($)} />
-      <Button key="cancel" label="Cancel" onPress={() => update($, form, () => null)} />
+      <Button key="save" label={f.kind === 'done' ? 'Save done' : 'Leave · save context'} variant="primary" onPress={() => saveForm($)} />
+      <Button key="cancel" label={f.kind === 'done' ? 'Cancel' : 'Close'} onPress={() => update($, form, () => null)} />
       {f.error ? <Text color="red"> {f.error}</Text> : null}
     </Box>,
   )
@@ -523,7 +554,7 @@ export const register: Register = (on, options) => {
             <Text dimColor>no active task </Text>
           )}
           {b.resume && <Button key="resume" label="Resume" hotkey="s" variant="primary" onPress={() => startTask($, b.resume!.id)} />}
-          {b.task && <Button key="pause" label="Pause" hotkey="p" onPress={() => openForm($, 'pause')} />}
+          {b.task && <Button key="pause" label="Pause" hotkey="p" onPress={() => pauseNow($)} />}
           {b.task && <Button key="done" label="Done" hotkey="d" onPress={() => openForm($, 'done')} />}
           <Button
             key="break"
@@ -550,7 +581,8 @@ export const register: Register = (on, options) => {
         </Box>,
       )
     }
-    if (f) rows.push(...(await formRows($, f, { Box, Text, Button, Input })))
+    const openPause = b.resume && f?.task === b.resume.id ? b.resume.reason : undefined
+    if (f) rows.push(...(await formRows($, f, { Box, Text, Button, Input }, openPause)))
     return <Box key="band" flexDirection="column">{rows}</Box>
   })
 

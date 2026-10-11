@@ -37,17 +37,23 @@ previous one is closed (D24).
 - **A task card** has: what comes out, done when, first step (two minutes or less),
   perimeter (what counts as related), kind, project (D10, D37, D47). A task cannot start
   with an incomplete card.
-- **Pause and done write a note**: what was done, where I stopped, next step (D47). That
-  note is the checkpoint whoever resumes the task reads first.
-- **Pause stops the task at the click** (D56). After that the user picks **why** they
-  paused from buttons only, no free text, so the reasons can be counted later: planned,
-  interrupted, blocked, switched, low energy, lost focus, other. "Other" is the check on
-  the list: if it gets more than one pause in ten, the list is wrong. The reason is focus
-  data (D44). A separate **save work** step writes the checkpoint note above, drafted by
-  the session, for when the user leaves the session. The reasons live in the band, not in
-  the engine's question dialog: that dialog takes 2-4 options and always adds free text.
-  Open: whether seven buttons fit the band or it drops to four (D55), and the prompt while
-  paused (a mod cannot grey the prompt box out; it can only drop a submitted prompt).
+- **Leaving and done write a note**: what was done, where I stopped, next step (D47). That
+  note is the checkpoint whoever resumes the task reads first. A pause alone writes none
+  (D56).
+- **Pause stops the task at the click** (D56): the pause is written with the time of the
+  click, before anything is asked. Only the active task can be paused. Then the user picks
+  **why** from buttons only, no free text, so the reasons can be counted later: planned,
+  interrupted, blocked, switched, low energy, lost focus, other. Until a pick the pause has
+  **no reason**; each pick is written at once and replaces the one before, while the pause
+  lasts. Resume closes the pause as it is, so a pause never given a reason stays without
+  one. Starting another task pauses the active one with the reason "switched". "Other" is
+  the check on the list: if it gets more than one pause in ten, the list is wrong. The
+  reason is focus data (D44). A separate **Leave · save context** step writes the checkpoint
+  note above, drafted by the session, for resuming the task in another session. The
+  reasons live in the band, not in the engine's question dialog: that dialog takes 2-4
+  options and always adds free text. Open: whether seven buttons fit the band or it drops
+  to four (D55), and the prompt while paused (a mod cannot grey the prompt box out; it can
+  only drop a submitted prompt).
 - **Carried tasks keep their id** and a counter of how many days they carried (D28).
 
 ## 3 · Drift (staying on the task)
@@ -185,4 +191,4 @@ not decided (D48).
 | D53 | process | build go-ahead |
 | D54 | current | drift is warned once per episode: no new warning while one is open or after the user justified staying; after "back", a new drift can be warned |
 | D55 | principle | user experience comes first: quick, clear and friendly beats complete; every visible change is judged against it |
-| D56 | current, partly open | pause stops at the click; the reason is picked from buttons only; a separate "save work" writes the drafted checkpoint note |
+| D56 | current, partly open | pause stops at the click; the reason is picked from buttons only, starts as none and can change while the pause lasts; a separate "Leave · save context" writes the drafted checkpoint note |

@@ -19,5 +19,8 @@ export const WRITER_CALLS: Record<string, WriterCall> = /* contract:start */ {
   "break_end": { "action": "break_end", "data": { "phone": false } },
   "usage": { "action": "usage", "task": "$task", "data": { "input_tokens": 120, "output_tokens": 40, "cache_read_input_tokens": 900, "cache_creation_input_tokens": 0, "model": "claude-test" } },
   "pause": { "action": "pause", "task": "$task", "data": { "note": "read 3.1; stopped at 3.2; next: the figure" } },
+  "pause_click": { "action": "pause", "task": "$task", "data": {} },
+  "pause_reason": { "action": "pause_reason", "task": "$task", "data": { "reason": "interrupted" } },
+  "checkpoint": { "action": "checkpoint", "task": "$task", "data": { "note": "read 3.2; stopped at the figure; next: section 4" } },
   "done": { "action": "done", "task": "$task", "data": { "fields": { "rating": "🔥", "learned_how": "reading", "drifted": false, "phone": false, "note": "notes written; next: section 4" }, "note": "notes written; next: section 4" } }
 } /* contract:end */

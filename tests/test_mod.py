@@ -92,3 +92,7 @@ def test_r27_usage_logged_per_turn_with_active_task():
 
 def test_r32_done_fields_from_config():
     proven("R32")
+
+
+def test_r34_pause_at_the_click_reason_and_leaving():
+    proven("R34")

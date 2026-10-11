@@ -150,7 +150,8 @@ def record(root: Path, etype: str, data: dict | None = None, task: str | None = 
                 task = task or new_task_id(today)
                 if task in st["tasks"]:
                     raise RuleError(f"task {task} already exists today")
-            elif etype in ("start", "pause", "done", "drop", "drift_warn", "drift_reply"):
+            elif etype in ("start", "pause", "pause_reason", "checkpoint", "done", "drop",
+                           "drift_warn", "drift_reply"):
                 if task not in st["tasks"]:
                     raise RuleError(f"unknown task for today: {task}")
             if etype == "start":
@@ -160,8 +161,15 @@ def record(root: Path, etype: str, data: dict | None = None, task: str | None = 
                     raise RuleError(f"the task card is incomplete: {', '.join(missing)} (D10, D37)")
                 if st["active"] and st["active"] != task:  # one active task at a time (D10)
                     written.append(_event("pause", today,
-                                          {"note": "auto-paused: another task started"},
+                                          {"note": "auto-paused: another task started",
+                                           "reason": "switched"},
                                           task=st["active"], session=session, cwd=cwd))
+            if etype == "pause" and st["tasks"][task]["status"] != "active":
+                raise RuleError(f"only the active task can be paused: {task} is {st['tasks'][task]['status']}")
+            if etype == "pause_reason" and not (st["last_paused"] == task
+                                                and st["tasks"][task]["status"] == "paused"):
+                # the reason belongs to the pause still open; after Resume it stays as it was (D56)
+                raise RuleError("this task has no open pause to give a reason to")
             if etype == "drift_warn":  # warn once per drift episode (D9, D54)
                 dr = st["drift"].get(task)
                 if dr and dr["open"]:

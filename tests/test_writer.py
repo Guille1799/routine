@@ -104,7 +104,9 @@ def test_r14_incomplete_card_cannot_start(root):
 def test_r8_unfinished_tasks_and_inbox_carry_over_with_a_counter(root):
     writer.record(root, "open_day", {"mode": "normal"}, day="2026-10-12")
     t = add(root)
-    writer.record(root, "pause", {"note": "did A, stopped at B, next C"}, task=t)
+    writer.record(root, "start", task=t)
+    writer.record(root, "pause", task=t)
+    writer.record(root, "checkpoint", {"note": "did A, stopped at B, next C"}, task=t)
     writer.record(root, "inbox", {"text": "video about housing"})
     writer.record(root, "close_day", {"tomorrow": "finish it"})
     writer.record(root, "open_day", {"mode": "light"}, day="2026-10-13")
@@ -239,3 +241,38 @@ def test_r18_drift_is_warned_once_per_episode(root):
         writer.record(root, "drift_warn", {"message": "m4"}, task=t)
     with pytest.raises(writer.RuleError):            # nothing open to answer
         writer.record(root, "drift_reply", {"action": "back"}, task=t)
+
+
+def test_r34_pause_stops_at_the_click_and_the_reason_is_set_while_it_lasts(root):
+    writer.record(root, "open_day", {"mode": "normal"}, day="2026-10-12")
+    a, b = add(root), add(root, title="Python exercise")
+    with pytest.raises(writer.RuleError):            # nothing to pause before it starts
+        writer.record(root, "pause", task=a)
+    writer.record(root, "start", task=a)
+    clicked = writer.record(root, "pause", task=a)[0]["ts"]
+    pause = state.current(root)["tasks"][a]["pauses"][-1]
+    assert pause == {"at": clicked, "reason": None}  # stopped at the click, no reason yet
+    writer.record(root, "pause_reason", {"reason": "interrupted"}, task=a)
+    writer.record(root, "pause_reason", {"reason": "blocked"}, task=a)   # a later pick replaces it
+    assert state.current(root)["tasks"][a]["pauses"][-1]["reason"] == "blocked"
+    with pytest.raises(events.EventError):           # buttons only: no free text
+        writer.record(root, "pause_reason", {"reason": "tired I guess"}, task=a)
+    writer.record(root, "start", task=a)             # Resume closes the pause as it is
+    with pytest.raises(writer.RuleError):
+        writer.record(root, "pause_reason", {"reason": "planned"}, task=a)
+    writer.record(root, "start", task=b)             # starting another pauses a: switched
+    assert state.current(root)["tasks"][a]["pauses"][-1]["reason"] == "switched"
+
+
+def test_r34_leaving_saves_the_context_as_its_own_step(root):
+    writer.record(root, "open_day", {"mode": "normal"}, day="2026-10-12")
+    a = add(root)
+    writer.record(root, "start", task=a)
+    writer.record(root, "pause", task=a)
+    assert state.current(root)["tasks"][a]["notes"] == []   # pausing saves no context
+    with pytest.raises(events.EventError):
+        writer.record(root, "checkpoint", {"note": "  "}, task=a)
+    writer.record(root, "checkpoint", {"note": "did A, stopped at B, next C"}, task=a)
+    st = state.current(root)
+    assert st["tasks"][a]["notes"] == ["did A, stopped at B, next C"]
+    assert st["tasks"][a]["status"] == "paused"

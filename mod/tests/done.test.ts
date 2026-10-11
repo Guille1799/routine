@@ -1,4 +1,5 @@
-// R19 (done in one step, missing fields asked), R32 (fields from the config), R18 (drift warned once).
+// R19 (done in one step, missing fields asked), R32 (fields from the config), R18 (drift warned once),
+// R34 (pause at the click, its reason, leaving with the context).
 import { expect, test } from 'claude-code/testing'
 
 import { WRITER_CALLS as C } from '../hooks/contract'
@@ -8,6 +9,13 @@ const TOOL = 'mcp__routine__routine'
 const ACTIVE = 't-20261012-bbbbbb'
 const BAND = { plugin: 'routine', component: 'AbovePrompt', props: BAND_PROPS } as const
 const DONE = C.done!.data as { fields: Record<string, unknown>; note: string }
+
+/** today.json after the writer folded a pause of the active task (the fake writer folds nothing). */
+function pausedToday(reason: string | null) {
+  const t = today({ active: null, last_paused: ACTIVE })
+  t.tasks[ACTIVE] = { ...t.tasks[ACTIVE]!, status: 'paused', since: undefined, pauses: [{ at: '2026-10-12T09:41:00+02:00', reason }] }
+  return t
+}
 
 function refusal(r: { deny?: string; isError?: boolean; text?: string }): string | undefined {
   return r.deny ?? (r.isError ? r.text : undefined)
@@ -83,15 +91,46 @@ test('R32: an unreadable config is said, and nothing is written', { options: OPT
   expect(writes(w)).toEqual([])
 })
 
-test('R16: pause from the band writes the drafted note the user corrected', { options: OPTIONS }, async ($, on) => {
+test('R34: Pause stops the task at the click, before any reason or context', { options: OPTIONS }, async ($, on) => {
   const w = world(on)
   await $.session.start(START)
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
   await ui.press({ key: 'pause' })
+  expect(writes(w)).toEqual([argvOf(C.pause_click!, ACTIVE)])
+  expect(w.forks).toHaveLength(1) // the context to leave is drafted after the pause, not before
+})
+
+test('R34: the reason is written at each pick while the pause lasts, and the band shows the one kept', { options: OPTIONS }, async ($, on) => {
+  const w = world(on)
+  await $.session.start(START)
+  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  await ui.press({ key: 'pause' })
+  w.today = pausedToday(null)
+  await ui.redraw()
+  await ui.press({ key: 'field-reason-1' })
+  expect(writes(w).at(-1)).toEqual(argvOf(C.pause_reason!, ACTIVE))
+  w.today = pausedToday('interrupted')
+  await ui.redraw()
+  expect((await ui.find({ key: 'field-reason-1' }))?.props.variant).toBe('primary')
+  await ui.press({ key: 'resume' })
+  w.today = today()
+  await ui.redraw()
+  expect(await ui.find({ key: 'field-reason-1' })).toBeUndefined() // after Resume the reason stays as it was
+})
+
+test('R34: leaving saves the drafted context the user corrected, as its own step', { options: OPTIONS }, async ($, on) => {
+  const w = world(on)
+  await $.session.start(START)
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  await ui.press({ key: 'pause' })
+  w.today = pausedToday(null)
+  await ui.redraw()
+  expect((await ui.find({ key: 'save' }))?.props.label).toBe('Leave · save context')
   expect((await ui.find({ key: 'field-note' }))?.props.value).toBe('drafted note')
-  await ui.input({ key: 'field-note', text: C.pause!.data!.note as string })
+  await ui.input({ key: 'field-note', text: C.checkpoint!.data!.note as string })
   await ui.press({ key: 'save' })
-  expect(writes(w)).toEqual([argvOf(C.pause!, ACTIVE)])
+  expect(writes(w)).toEqual([argvOf(C.pause_click!, ACTIVE), argvOf(C.checkpoint!, ACTIVE)])
+  expect(await ui.find({ key: 'field-note' })).toBeUndefined()
 })
 
 test('R18: the drift warning and the reply reach the writer, and the writer refusal reaches the model', { options: OPTIONS }, async ($, on) => {

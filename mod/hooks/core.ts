@@ -16,6 +16,8 @@ export type Card = {
   carried?: number
   notes?: string[]
   since?: string
+  /** Every pause, at the click; reason null until the user picks one (D56). */
+  pauses?: { at: string; reason: string | null }[]
 }
 
 export type Today = {
@@ -47,7 +49,7 @@ export type FieldValue = string | boolean
 
 // The writer CLI's actions this mod uses. The CLI spells them with dashes.
 export type WriterAction =
-  | 'start' | 'pause' | 'done' | 'drift_warn' | 'drift_reply'
+  | 'start' | 'pause' | 'pause_reason' | 'checkpoint' | 'done' | 'drift_warn' | 'drift_reply'
   | 'inbox' | 'said' | 'break_start' | 'break_end' | 'usage'
 
 export type WriterCall = {
@@ -144,12 +146,15 @@ export function breakLeftMs(brk: Today['break'], nowMs: number): number | undefi
   return Date.parse(brk.since) + minutes * 60000 - nowMs
 }
 
+/** Why a pause happened, buttons only (D56). The writer keeps the same list. */
+export const PAUSE_REASONS = ['planned', 'interrupted', 'blocked', 'switched', 'low energy', 'lost focus', 'other'] as const
+
 export type Band = {
   date: string
   progress: string
   task?: { alias: string; title: string; elapsed?: string; breakDue: boolean }
   /** With no active task, the task paused last: the band offers Resume. */
-  resume?: { id: string; alias: string; title: string }
+  resume?: { id: string; alias: string; title: string; reason: string | null }
   break?: { leftMin: number; isOver: boolean }
   asOf: string
 }
@@ -178,7 +183,8 @@ export function band(today: Today, nowMs: number): Band {
     }
   } else if (today.last_paused && today.tasks[today.last_paused]?.status === 'paused') {
     const id = today.last_paused
-    out.resume = { id, alias: aliasOf(today, id), title: today.tasks[id]?.title ?? id }
+    const card = today.tasks[id]
+    out.resume = { id, alias: aliasOf(today, id), title: card?.title ?? id, reason: card?.pauses?.at(-1)?.reason ?? null }
   }
   return out
 }

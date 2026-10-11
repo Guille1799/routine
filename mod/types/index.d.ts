@@ -4,11 +4,11 @@
 export type RoutineFieldValue = string | boolean
 
 export type RoutineForm = {
-  /** pause writes a note; done writes the configured fields and the note. */
+  /** pause: the task already stopped at the click; the form picks the reason and saves the context to leave. done: the fields and the note. */
   kind: 'pause' | 'done'
   task: string
   values: Record<string, RoutineFieldValue>
-  /** The note the session drafted (prefill = "session"); null while drafting. */
+  /** The note the session drafted (pause: the context to leave; done: prefill = "session"); null while drafting. */
   draft: string | null
   error: string | null
 }
