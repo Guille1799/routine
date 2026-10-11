@@ -1,0 +1,27 @@
+{
+  "name": "routine",
+  "version": "0.1.0",
+  "description": "A daily routine band: one active task at a time, drift warnings, done in one step, inbox, breaks",
+  "author": { "name": "routine contributors" },
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "dataDir": {
+      "type": "string",
+      "title": "Data folder",
+      "description": "Absolute path of the private data folder (outside the code repository). Empty: the ROUTINE_DATA_DIR variable.",
+      "default": ""
+    },
+    "python": {
+      "type": "string",
+      "title": "Python",
+      "description": "The Python executable that runs the writer (python -m routine).",
+      "default": "python"
+    },
+    "codeDir": {
+      "type": "string",
+      "title": "Code folder",
+      "description": "The routine repository (where python -m routine runs). Empty: the folder above this mod.",
+      "default": ""
+    }
+  }
+}
