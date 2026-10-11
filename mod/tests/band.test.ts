@@ -36,6 +36,16 @@ test('R17: the band shows date, progress, active task with its time, buttons and
   }
 })
 
+test('R17: the band draws on the first ask of a pane, before any surface has attached', { options: OPTIONS }, async ($, on) => {
+  // The desktop asks for the band when a pane becomes the active one, and that ask is
+  // what attaches its surface: the drawing must not wait for the attach-time setup.
+  const w = world(on, { surfaces: [] })
+  await $.session.start(START)
+  expect(w.registeredTools).toEqual([])
+  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  expect(await text(ui)).toContain('T2 Read section 3 · 41m')
+})
+
 test('R17: the band re-reads today.json on every draw', { options: OPTIONS }, async ($, on) => {
   const w = world(on)
   await $.session.start(START)

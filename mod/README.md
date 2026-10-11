@@ -27,6 +27,14 @@ the contracts it relies on in [`docs/INTERFACES.md`](../docs/INTERFACES.md).
 - `hooks/contract.ts` lists every writer call the mod makes; `tests/test_mod_contract.py`
   replays them through the real CLI.
 
+## Where the band shows
+
+Claude Code Desktop draws one plugin band per window: above the prompt of the **active
+pane** only, and only for your own local sessions (checked in the desktop app 2.31226, whose
+Code tab mounts the band with `isPanelActive`). In a split view the band follows the
+pane you click into; the other panes show none, even though the mod runs in each of them
+(tool, context and `/inbox` work everywhere). The terminal draws it in every session.
+
 ## Options
 
 | Option | Default | What |
