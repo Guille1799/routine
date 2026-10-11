@@ -44,8 +44,10 @@ previous one is closed (D24).
   interrupted, blocked, switched, low energy, lost focus, other. "Other" is the check on
   the list: if it gets more than one pause in ten, the list is wrong. The reason is focus
   data (D44). A separate **save work** step writes the checkpoint note above, drafted by
-  the session, for when the user leaves the session. Open: whether seven buttons fit the
-  band or it drops to four (D55), and whether the prompt can be locked while paused.
+  the session, for when the user leaves the session. The reasons live in the band, not in
+  the engine's question dialog: that dialog takes 2-4 options and always adds free text.
+  Open: whether seven buttons fit the band or it drops to four (D55), and the prompt while
+  paused (a mod cannot grey the prompt box out; it can only drop a submitted prompt).
 - **Carried tasks keep their id** and a counter of how many days they carried (D28).
 
 ## 3 · Drift (staying on the task)
