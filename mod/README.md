@@ -1,1 +1,59 @@
-Owned by piece P3. See docs/INTERFACES.md and docs/REQUIREMENTS.md (R15-R20, R25-R27, R32).
+# The routine mod (P3)
+
+A Claude Code mod that keeps the day's one active task in front of you, in every
+session. Requirements R15-R20, R25-R27 and R32 in [`docs/REQUIREMENTS.md`](../docs/REQUIREMENTS.md);
+the contracts it relies on in [`docs/INTERFACES.md`](../docs/INTERFACES.md).
+
+## What it does
+
+| Where | What |
+|---|---|
+| Band above the prompt | `date · n of m done · T2 <task> · 41m · [Pause] [Done] [Break] [Recap] · data 09:41`. The last part is the time of the data it read (`last_ts`). A missing data folder or diary is said there, never thrown |
+| Every prompt | The active task's card, its perimeter and the drift rule go to the model as hidden context, read when the prompt is sent (`prompt.submit`, not the system prompt, so the prompt cache is kept) |
+| Tool `routine` | The model calls it when you say "let's do T2", "pause", "done", when a message drifts off the perimeter (warned once), to capture to the inbox, or to keep something you said. "T2" is the 2nd task in today's order |
+| Done | One step: one row per configured field (`config/done_fields.toml`) and one note the session drafts and you correct. From chat, the tool asks only for the missing required fields |
+| `/inbox <text>` | Captured without a model turn |
+| Break | Pomodoro by default (5 min after 25 min of work), 15 and 17 min offered. The time left comes from the `break_start` event, so a reload keeps it. At the end, one tap: phone yes / no, then a recap |
+| Recap | The `Recap` button, and after a break: the built-in `/recap` when this build has one, else one question over this session's transcript |
+| Usage | Each turn with an active task logs its token counts against that task |
+
+## Rules it keeps
+
+- **It never writes a file.** Every change is `python -m routine <action>` (the single
+  writer, D35). Reads are fresh reads of `<data>/state/today.json`, never cached.
+- **Nothing in non-interactive runs.** A session with no surface (`claude -p`, robots)
+  gets no tool, no command, no context, and nothing is written. The desktop app attaches
+  its surface after the session starts, so the tool is registered on attach.
+- `hooks/contract.ts` lists every writer call the mod makes; `tests/test_mod_contract.py`
+  replays them through the real CLI.
+
+## Options
+
+| Option | Default | What |
+|---|---|---|
+| `dataDir` | the `ROUTINE_DATA_DIR` variable | the private data folder, outside this repository |
+| `python` | `python` | the Python that runs the writer |
+| `codeDir` | the folder above this mod | where `python -m routine` runs |
+
+## Develop and test
+
+```bash
+claude plugin validate mod
+```
+
+```bash
+claude plugin test mod
+```
+
+```bash
+python -m pytest -q
+```
+
+To try it in a session, load the folder for that session only:
+
+```bash
+claude --plugin-dir ./mod
+```
+
+In the desktop app, name the folder in `CLAUDE_CODE_PLUGIN_DIRS` (absolute path, in the
+`env` block of the user settings) instead, and set `dataDir` in the plugin's options.
