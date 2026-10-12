@@ -58,6 +58,8 @@ export type World = {
   dataExists: boolean
   surfaces: string[]
   fields: DoneField[] | { exit: number; error: string }
+  /** What `python -m routine settings` answers (routine.toml with defaults applied). */
+  settings: { idle_pause_minutes: number } | { exit: number; error: string }
   commands: { name: string; source: 'builtin' | 'plugin' | 'user' | 'mcp' }[]
   fork: string | 'nothing-to-fork'
   /** Exit code the writer answers next (0 written, 1 refused). */
@@ -85,9 +87,9 @@ export function argvOf(call: WriterCall, task?: string): string[] {
   })
 }
 
-/** Writer runs only: the `fields` reads and the load-time `refresh` left out. */
+/** Writer runs only: the `fields` and `settings` reads and the load-time `refresh` left out. */
 export function writes(w: World): string[][] {
-  return w.runs.filter(a => a[3] !== 'fields' && a[3] !== 'refresh')
+  return w.runs.filter(a => !['fields', 'settings', 'refresh'].includes(a[3] ?? ''))
 }
 
 /** The load-time rebuilds of today.json. */
@@ -104,6 +106,7 @@ export function world(on: On, over: Partial<World> = {}): World {
     dataExists: true,
     surfaces: ['desktop'],
     fields: EXAMPLE_FIELDS,
+    settings: { idle_pause_minutes: 20 },
     commands: [],
     fork: 'drafted note',
     writerExit: 0,
@@ -138,6 +141,10 @@ export function world(on: On, over: Partial<World> = {}): World {
     const answer = (exitCode: number, stdout: string) => ({
       value: { exitCode, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false },
     })
+    if (argv[3] === 'settings') {
+      if ('exit' in w.settings) return answer(w.settings.exit, JSON.stringify({ ok: false, error: w.settings.error }))
+      return answer(0, JSON.stringify({ ok: true, settings: w.settings }))
+    }
     if (argv[3] === 'fields') {
       if (Array.isArray(w.fields)) return answer(0, JSON.stringify({ ok: true, fields: w.fields }))
       return answer(w.fields.exit, JSON.stringify({ ok: false, error: w.fields.error }))

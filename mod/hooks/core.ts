@@ -16,6 +16,8 @@ export type Card = {
   carried?: number
   notes?: string[]
   since?: string
+  /** A task waiting on something outside (not built yet): never paused for idleness (D59). */
+  waiting?: boolean
   /** Every pause, at the click; reason null until the user picks one (D56). */
   pauses?: { at: string; reason: string | null }[]
 }
@@ -394,4 +396,23 @@ export function bandFit(columns: number): BandFit {
 export function shortProgress(today: Today): string {
   const live = today.order.filter(id => today.tasks[id]?.status !== 'dropped')
   return `${live.filter(id => today.tasks[id]?.status === 'done').length}/${live.length}`
+}
+
+/**
+ * The automatic pause (D59): after `minutes` idle minutes, counted from the latest of
+ * this session's last answer, the diary's last event (any session's activity) and the
+ * task's start, the active task is paused with the reason `idle`. Nothing to do when it
+ * is off (0), no day is open, no task is active, the task is waiting, or a break runs.
+ */
+export type IdleDue = { kind: 'off' } | { kind: 'wait'; ms: number } | { kind: 'pause'; task: string }
+
+export const IDLE_DEFAULT_MINUTES = 20
+
+export function idleDue(today: Today | undefined, lastAnswerAt: number, minutes: number, nowMs: number): IdleDue {
+  if (!today?.open || !today.active || minutes <= 0 || today.break) return { kind: 'off' }
+  const card = today.tasks[today.active]
+  if (!card || card.status !== 'active' || card.waiting) return { kind: 'off' }
+  const seen = [lastAnswerAt, today.last_ts ? Date.parse(today.last_ts) : 0, card.since ? Date.parse(card.since) : 0]
+  const due = Math.max(...seen.filter(Number.isFinite)) + minutes * 60000
+  return nowMs >= due ? { kind: 'pause', task: today.active } : { kind: 'wait', ms: due - nowMs }
 }

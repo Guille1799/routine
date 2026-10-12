@@ -14,6 +14,8 @@ import {
   clockOf,
   cleanFields,
   dayStatus,
+  IDLE_DEFAULT_MINUTES,
+  idleDue,
   inboxText,
   localDate,
   missingFields,
@@ -55,6 +57,9 @@ type Read = { today: Today; problem?: undefined } | { today?: undefined; problem
 let OPTIONS: PluginOptions = {}
 let isReady = false
 let breakToastedFor: string | undefined
+// The idle pause (D59): this session's last answer and the timer that checks after it.
+let lastAnswerAt = 0
+let idleTimer: { cancel: () => void } | undefined
 
 async function settings($: $): Promise<Settings> {
   const fromOptions = String(OPTIONS.dataDir ?? '').trim()
@@ -253,6 +258,42 @@ async function refreshSnapshot($: $): Promise<void> {
   $.ui.invalidate('ui.render')
 }
 
+/** `idle_pause_minutes` from <data>/config/routine.toml, read by the writer's CLI; 0 is off. */
+async function idleMinutes($: $): Promise<number> {
+  const s = await settings($)
+  const env: Record<string, string> = { PYTHONIOENCODING: 'utf-8', PYTHONUTF8: '1' }
+  if (s.dataDir) env.ROUTINE_DATA_DIR = s.dataDir
+  try {
+    const ran = await $.process.run([s.python, '-m', 'routine', 'settings'], { cwd: s.codeDir, env })
+    const answer = readWriterAnswer(ran.exitCode, ran.stdout, ran.stderr)
+    if (!answer.ok) {
+      $.ui.log(`routine: no idle pause, settings unreadable: ${answer.error}`, { to: 'debug' })
+      return 0 // an unreadable setting never pauses anyone
+    }
+    const n = (JSON.parse(ran.stdout) as { settings?: { idle_pause_minutes?: unknown } }).settings?.idle_pause_minutes
+    return typeof n === 'number' && Number.isFinite(n) && n >= 0 ? n : IDLE_DEFAULT_MINUTES
+  } catch (err) {
+    $.ui.log(`routine: no idle pause, settings did not run: ${String(err)}`, { to: 'debug' })
+    return 0
+  }
+}
+
+/** Checks whether the idle pause is due: pauses with the reason `idle`, or waits the rest. */
+async function idleCheck($: $): Promise<void> {
+  idleTimer?.cancel()
+  idleTimer = undefined
+  if (!(await isInteractive($))) return
+  const r = await readToday($)
+  const minutes = r.today?.active ? await idleMinutes($) : 0
+  const due = idleDue(r.today, lastAnswerAt, minutes, await $.clock.now())
+  if (due.kind === 'wait') {
+    idleTimer = $.clock.after(due.ms, () => void idleCheck($))
+  } else if (due.kind === 'pause') {
+    const out = await write($, { action: 'pause', task: due.task, data: { reason: 'idle' } })
+    if (out.ok) $.ui.toast(`Paused after ${minutes} idle minutes. Resume when you are back.`)
+  }
+}
+
 async function setup($: $): Promise<void> {
   if (isReady || !(await isInteractive($))) return
   isReady = true
@@ -290,6 +331,7 @@ async function setup($: $): Promise<void> {
   })
   $.clock.every(TICK_MS, () => void tick($))
   await refreshSnapshot($)
+  await idleCheck($) // after a load, idleness counts from the diary's last event
 }
 
 async function tick($: $): Promise<void> {
@@ -406,6 +448,8 @@ export const register: Register = (on, options) => {
 
   on('prompt.submit', async ($, e, next) => {
     if (!(await isInteractive($))) return next(e)
+    idleTimer?.cancel() // the user is here: no idle pause until the next answer ends
+    idleTimer = undefined
     const captured = inboxText(e.text)
     if (captured !== undefined) return { drop: await capture($, captured) }
     const r = await readToday($)
@@ -424,6 +468,10 @@ export const register: Register = (on, options) => {
 
   on('turn.complete', async ($, e, next) => {
     const res = await next(e)
+    if (e.agentId === undefined && (await isInteractive($))) {
+      lastAnswerAt = await $.clock.now() // the idle minutes count from the end of this answer (D59)
+      await idleCheck($)
+    }
     if (!e.usage || !(await isInteractive($))) return res
     const r = await readToday($)
     if (!r.today?.active) return res
