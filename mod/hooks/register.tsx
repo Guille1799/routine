@@ -551,6 +551,9 @@ export const register: Register = (on, options) => {
 
   on('prompt.submit', async ($, e, next) => {
     if (!(await isInteractive($))) return next(e)
+    // The tool and commands are registered at start or attach; after a resume or a reload the
+    // attach may come late or not again, so the first interactive prompt makes sure of them.
+    await setup($)
     idleTimer?.cancel() // the user is here: no idle pause until the next answer ends
     idleTimer = undefined
     const captured = inboxText(e.text)

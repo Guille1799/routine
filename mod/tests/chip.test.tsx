@@ -132,3 +132,15 @@ test('D64: /done opens the done row for this session\'s task; /tasks opens the l
   expect((await $.command.run({ command: 'tasks', args: '' } as never)).text).toBe("Today's tasks are open.")
   expect(w.opened).toEqual(['routine-tasks'])
 })
+
+test('D64: on desktop the chip is drawn by the plugin, never left to the engine (Desktop shows no engine chip)', { options: OPTIONS }, async ($, on) => {
+  // Desktop draws the SessionMode chip only from a plugin's own tree: an answer of
+  // {type: "engine"} with rewritten modes is not shown (desktop app 2.31226, mo() and ih()).
+  const w = world(on, { today: day() })
+  await $.session.start(START)
+  w.session = 'B'
+  const ui = await $.ui.mount({ ...CHIP, surface: 'desktop', props: { modes: [] } as never })
+  const tree = (await ui.drawn()) as { type: string }
+  expect(tree.type).toBe('Box')
+  expect((await ui.find({ type: 'Text' }))?.text).toBe('T2 \u25b6 41m')
+})
