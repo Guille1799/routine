@@ -347,3 +347,16 @@ def test_r39_waiting_is_paused_that_moves_on_and_frees_the_active_slot(root):
     writer.record(root, "wait", task=a)
     writer.record(root, "done", {"fields": {}}, task=a)
     assert state.current(root)["tasks"][a]["status"] == "done"
+
+
+def test_r38_settings_have_defaults_and_refuse_bad_values(root):
+    from routine import config
+    assert config.settings(root) == {"idle_pause_minutes": 20}          # no file: defaults
+    (root / "config").mkdir(exist_ok=True)
+    f = root / "config" / "routine.toml"
+    f.write_text("idle_pause_minutes = 0", encoding="utf-8")
+    assert config.settings(root)["idle_pause_minutes"] == 0
+    for bad in ('idle_pause_minutes = -1', 'idle_pause_minutes = "20"', 'idle_pause = 5'):
+        f.write_text(bad, encoding="utf-8")
+        with pytest.raises(config.ConfigError):
+            config.settings(root)
