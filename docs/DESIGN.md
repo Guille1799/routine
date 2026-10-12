@@ -121,6 +121,9 @@ too (D30). The sheet shows one count per channel and expands only what is new (D
   missed (D38). Mail and calendar come from Claude's connectors when the user arrives.
 - **Token usage** is logged per turn while a task is active, so each task has a cost (D39).
 - **English everywhere** in the product (D36).
+- **The manual is checked against the code** (D71): `docs/MANUAL.md` must have a row for
+  every CLI action, tool action, slash command, done field kind and setting, read from the
+  code by `tests/test_manual.py`, so the manual cannot fall behind silently.
 
 ## 9 · Success criterion
 
@@ -206,3 +209,4 @@ not decided (D48).
 | D66 | current | surrounding rules: a break can start with zero, one or more tasks running; starting a task ends a break; closing the day pauses the active task and ends a break; one priority a day, a new one replaces the old |
 | D67 | current | the work/break rhythm is visible: the band names the technique and shows the phase (work 18/25 · break 3/5); default pomodoro 25/5, alternatives 50/10 and free (flowtime); the technique is chosen per task and stored on its card |
 | D68 | current | refines D67: the technique is chosen per task; with none chosen there is no work timer and breaks are taken whenever the user wants; break lengths offered: 5, 10, 15 or 20 minutes |
+| D71 | current | the manual (docs/MANUAL.md) is checked against the code by a test: every action, tool action, command, done field kind and setting read from the code must have its row |
