@@ -54,7 +54,7 @@ test('R36: yesterday still open: /plan-day closes it first, and the task context
   expect(second).not.toContain(ASK)
   expect(second).toContain('Active task T2: Read section 3')
   const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
-  expect(await bandText(ui)).toContain('2026-10-11 still open · /plan-day 2026-10-11')
+  expect(await bandText(ui)).toContain('2026-10-11 still open · /plan-day')
 })
 
 test('R36: a day open for today asks nothing', { options: OPTIONS }, async ($, on) => {

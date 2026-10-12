@@ -12,7 +12,8 @@ import {
   PAUSE_REASONS,
   askFor,
   band,
-  bandFit,
+  buttonLabel,
+  fitBand,
   cardChanges,
   PANE_EDIT_FIELDS,
   clockOf,
@@ -35,7 +36,7 @@ import {
   taskRows,
   writerArgv,
 } from './core'
-import type { DoneField, Today, WriterCall, WriterOutcome } from './core'
+import type { BandButton, DoneField, Today, WriterCall, WriterOutcome } from './core'
 
 type $ = EngineInterface
 
@@ -716,81 +717,79 @@ export const register: Register = (on, options) => {
         </Box>
       )
     }
-    const stale = day.kind === 'stale' ? <Text color="yellow">{day.openDay} still open · /plan-day</Text> : null
 
-    const fit = bandFit(e.props.bodyColumns)
-    const dot = <Text dimColor>·</Text>
-    const asOfShort = <Text dimColor>{fit.asOf === 'long' ? `data ${b.asOf}` : b.asOf}</Text>
-    const head = [
-      stale,
-      fit.date ? <Text dimColor>{b.date}</Text> : null,
-      fit.progress ? <Text dimColor>{fit.progress === 'long' ? b.progress : shortProgress(r.today)}</Text> : null,
-    ].filter(x => x !== null)
-    let line
-    if (b.break) {
-      line = b.break.isOver ? (
-        <Box key="line" columnGap={1}>
-          <Text>{fit.date ? 'Break over. Phone during the break?' : 'Phone in the break?'}</Text>
-          <Button key="phone-yes" label="Yes" onPress={() => endBreak($, true)} />
-          <Button key="phone-no" label="No" variant="primary" onPress={() => endBreak($, false)} />
-          {asOfShort}
-        </Box>
-      ) : (
-        <Box key="line" columnGap={1}>
-          {head}
-          <Text>{`break ${b.break.leftMin}/${b.break.minutes} left`}</Text>
-          <Button key="phone-no" label="End break" onPress={() => endBreak($, false)} />
-          {asOfShort}
-        </Box>
-      )
-    } else {
-      const rh = b.task?.rhythm
-      const due = rh?.due === true
-      const phase = !b.task
-        ? null
-        : !rh || rh.kind === 'none'
-          ? b.task.elapsed ?? null
-          : rh.due
-            ? `time for a ${rh.rest}-min break`
-            : rh.kind === 'free'
-              ? fit.date ? `free · ${rh.work}m working` : `${rh.work}m`
-              : fit.date ? `${rh.name} · work ${rh.work}/${rh.total}` : `${rh.work}/${rh.total}`
-      line = (
-        <Box key="line" columnGap={1} flexWrap="nowrap">
-          {head}
-          {head.length > 0 ? dot : null}
-          {b.task ? (
-            <Box key="task" columnGap={1} flexShrink={1}>
-              <Text bold wrap="truncate-end">{b.task.alias} {b.task.title}</Text>
-              {phase ? <Text bold={!due} color={due ? 'yellow' : undefined}>{phase}</Text> : null}
-              {due && rh && (
-                <Button key="start-break" label="Start break" variant="primary" onPress={() => startBreak($, rh.rest, rh.technique)} />
-              )}
-            </Box>
-          ) : b.waiting ? (
-            <Text wrap="truncate-end">{fit.date ? `${b.waiting.alias} ${b.waiting.title} · waiting since ${b.waiting.since}` : `${b.waiting.alias} ${b.waiting.title} · waiting`}</Text>
-          ) : b.resume ? (
-            <Text dimColor wrap="truncate-end">{b.resume.alias} {b.resume.title} · paused</Text>
-          ) : (
-            <Text dimColor>{fit.recap ? "no task in this session · say 'let's do T#'" : 'no task here'}</Text>
-          )}
-          {b.resume && <Button key="resume" label="Resume" hotkey="s" variant="primary" onPress={() => startTask($, b.resume!.id)} />}
-          {b.task && <Button key="pause" label="Pause" hotkey="p" onPress={() => pauseNow($, b.task!.id)} />}
-          {b.task && <Button key="done" label="Done" hotkey="d" onPress={() => openForm($, b.task!.id)} />}
-          {b.waiting && <Button key="done" label="Done" hotkey="d" onPress={() => openForm($, b.waiting!.id)} />}
-          {b.task && fit.recap && <Button key="wait" label="Wait" hotkey="w" onPress={() => waitTask($, b.task!.id)} />}
-          {b.elsewhere && fit.recap && (
-            <Text dimColor wrap="truncate-end">{fit.date ? `now: ${b.elsewhere.alias} ${b.elsewhere.title} elsewhere` : `now: ${b.elsewhere.alias} elsewhere`}</Text>
-          )}
-          {fit.break === 'always' && !due && (
-            <Button key="break" label="Break" hotkey="b" onPress={() => update($, breakPick, v => !v)} />
-          )}
-          {fit.recap && <Button key="recap" label="Recap" hotkey="r" onPress={() => recap($)} />}
-          {fit.tasks && <Button key="tasks" label="Tasks" hotkey="t" onPress={() => void $.ui.open({ id: PANE, title: 'Today' })} />}
-          {asOfShort}
-        </Box>
-      )
+    // The line is laid out against its real width (fitBand): the title gives way first, the
+    // phase in words and Tasks never. Two cells spare for what the estimate cannot know.
+    const columns = Math.max(20, e.props.bodyColumns - 2)
+    const rh = b.task?.rhythm
+    const due = rh?.due === true
+    const phaseText = (): string | undefined => {
+      if (b.break) return b.break.isOver ? 'Break over. Phone during the break?' : `break ${b.break.leftMin}/${b.break.minutes} left`
+      if (b.task) {
+        if (!rh || rh.kind === 'none') return b.task.elapsed
+        if (rh.due) return `time for a ${rh.rest}-min break`
+        return rh.kind === 'free' ? `free · ${rh.work}m working` : `${rh.name} · work ${rh.work}/${rh.total}`
+      }
+      if (b.waiting) return `waiting since ${b.waiting.since}`
+      if (b.resume) return 'paused'
+      return "say 'let's do T#'"
     }
+    const own = b.task ?? b.waiting ?? b.resume
+    type Action = BandButton & { onPress: () => unknown; variant?: 'primary' }
+    const actions: Action[] = []
+    if (b.break) {
+      if (b.break.isOver) {
+        actions.push({ key: 'phone-yes', label: 'Yes', keep: true, onPress: () => endBreak($, true) })
+        actions.push({ key: 'phone-no', label: 'No', keep: true, variant: 'primary', onPress: () => endBreak($, false) })
+      } else {
+        actions.push({ key: 'phone-no', label: 'End break', keep: true, onPress: () => endBreak($, false) })
+      }
+    } else {
+      if (due && rh) actions.push({ key: 'start-break', label: 'Start break', keep: true, variant: 'primary', onPress: () => startBreak($, rh.rest, rh.technique) })
+      if (b.resume) actions.push({ key: 'resume', label: 'Resume', hotkey: 's', variant: 'primary', onPress: () => startTask($, b.resume!.id) })
+      if (b.task) actions.push({ key: 'pause', label: 'Pause', hotkey: 'p', onPress: () => pauseNow($, b.task!.id) })
+      if (b.task) actions.push({ key: 'done', label: 'Done', hotkey: 'd', onPress: () => openForm($, b.task!.id) })
+      if (b.waiting) actions.push({ key: 'done', label: 'Done', hotkey: 'd', onPress: () => openForm($, b.waiting!.id) })
+      if (b.task) actions.push({ key: 'wait', label: 'Wait', hotkey: 'w', secondary: true, onPress: () => waitTask($, b.task!.id) })
+      if (!due) actions.push({ key: 'break', label: 'Break', hotkey: 'b', secondary: true, onPress: () => update($, breakPick, v => !v) })
+      actions.push({ key: 'recap', label: 'Recap', hotkey: 'r', secondary: true, onPress: () => recap($) })
+    }
+    actions.push({ key: 'tasks', label: 'Tasks', hotkey: 't', keep: true, onPress: () => void $.ui.open({ id: PANE, title: 'Today' }) })
+    const phase = phaseText()
+    const lay = fitBand(columns, {
+      stale: day.kind === 'stale' ? `${day.openDay} still open · /plan-day` : undefined,
+      date: b.date,
+      progress: b.progress,
+      progressShort: shortProgress(r.today),
+      title: b.break?.isOver ? '' : own ? `${own.alias} ${own.title}` : 'no task in this session',
+      phase,
+      buttons: actions,
+      extra: b.elsewhere ? `now: ${b.elsewhere.alias} elsewhere` : undefined,
+      asOf: `data ${b.asOf}`,
+      asOfShort: b.asOf,
+    })
+    const line = (
+      <Box key="line" columnGap={1} flexWrap="nowrap">
+        {day.kind === 'stale' ? <Text color="yellow">{`${day.openDay} still open · /plan-day`}</Text> : null}
+        {lay.date ? <Text dimColor>{b.date}</Text> : null}
+        {lay.progress ? <Text dimColor>{lay.progress === 'long' ? b.progress : shortProgress(r.today)}</Text> : null}
+        {lay.date || lay.progress ? <Text dimColor>{'·'}</Text> : null}
+        {lay.title ? <Text bold={!!b.task} dimColor={!b.task && !b.waiting}>{lay.title}</Text> : null}
+        {lay.title && phase ? <Text dimColor>{'·'}</Text> : null}
+        {phase ? <Text bold={!!b.task && !due} color={due ? 'yellow' : undefined} dimColor={!!b.resume || (!own && !b.break)}>{phase}</Text> : null}
+        {actions.filter(a => !lay.dropped.includes(a.key)).map(a => (
+          <Button
+            key={a.key}
+            label={buttonLabel(a, lay.compact)}
+            {...(a.hotkey && !(lay.compact && !a.keep) ? { hotkey: a.hotkey } : {})}
+            {...(a.variant ? { variant: a.variant } : {})}
+            onPress={a.onPress}
+          />
+        ))}
+        {lay.extra && b.elsewhere ? <Text dimColor>{`now: ${b.elsewhere.alias} elsewhere`}</Text> : null}
+        <Text dimColor>{lay.asOf === 'long' ? `data ${b.asOf}` : b.asOf}</Text>
+      </Box>
+    )
 
     const rows = [line]
     if (picking && !b.break) {
