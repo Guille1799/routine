@@ -330,8 +330,6 @@ def test_d59_idle_is_a_valid_pause_reason(root):
 def test_r39_waiting_is_paused_that_moves_on_and_frees_the_active_slot(root):
     writer.record(root, "open_day", {"mode": "normal"}, day="2026-10-12")
     a, b = add(root), add(root, title="other")
-    with pytest.raises(writer.RuleError):           # a pending task cannot wait
-        writer.record(root, "wait", task=a)
     writer.record(root, "start", task=a)
     writer.record(root, "wait", task=a)
     st = state.current(root)
@@ -360,3 +358,17 @@ def test_r38_settings_have_defaults_and_refuse_bad_values(root):
         f.write_text(bad, encoding="utf-8")
         with pytest.raises(config.ConfigError):
             config.settings(root)
+
+
+def test_r40_tasks_remember_the_session_that_works_on_them(root):
+    writer.record(root, "open_day", {"mode": "normal"}, day="2026-10-12")
+    main, side = add(root), add(root, title="slow side task")
+    writer.record(root, "start", task=main, session="s-main")
+    writer.record(root, "wait", task=side, session="s-side")      # side task straight from pending
+    st = state.current(root)
+    assert st["active"] == main                                     # the side task does not steal it
+    assert st["tasks"][main]["session"] == "s-main"
+    assert st["tasks"][side]["session"] == "s-side" and st["tasks"][side]["status"] == "waiting"
+    incomplete = add(root, title="x", perimeter="")
+    with pytest.raises(writer.RuleError):
+        writer.record(root, "wait", task=incomplete, session="s-other")

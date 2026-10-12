@@ -174,8 +174,14 @@ def record(root: Path, etype: str, data: dict | None = None, task: str | None = 
                                           {"note": "auto-paused: another task started",
                                            "reason": "switched"},
                                           task=st["active"], session=session, cwd=cwd))
-            if etype == "wait" and status not in ("active", "paused"):
-                raise RuleError(f"only an active or paused task can wait: {task} is {status} (D62)")
+            if etype == "wait" and status not in ("pending", "active", "paused"):
+                # pending → waiting: a side task started straight in its own session (D64)
+                raise RuleError(f"only a pending, active or paused task can wait: {task} is {status} (D62)")
+            if etype == "wait" and status == "pending":
+                card = st["tasks"][task]
+                missing = [f for f in ev.TASK_FIELDS_REQUIRED_TO_START if not card.get(f)]
+                if missing:
+                    raise RuleError(f"the task card is incomplete: {', '.join(missing)} (D10, D37)")
             if etype == "pause" and st["tasks"][task]["status"] != "active":
                 raise RuleError(f"only the active task can be paused: {task} is {st['tasks'][task]['status']}")
             if etype == "pause_reason" and not (st["last_paused"] == task
