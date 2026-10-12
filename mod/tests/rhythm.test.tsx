@@ -65,10 +65,9 @@ describe('techniques', () => {
 test('R46: a pomodoro shows its name and the work phase with its minutes, shorter when narrow', { options: OPTIONS }, async ($, on) => {
   world(on, { today: at('pomodoro 25/5') })
   await $.session.start(START)
-  expect(await text(await $.ui.mount({ ...band(120), surface: 'desktop' }))).toContain('T2 Read section 3 Pomodoro · work 11/25')
+  expect(await text(await $.ui.mount({ ...band(140), surface: 'desktop' }))).toContain('T2 Read section 3 · Pomodoro · work 11/25')
   const narrow = await text(await $.ui.mount({ ...band(56), surface: 'terminal' }))
-  expect(narrow).toContain('11/25')
-  expect(narrow).not.toContain('Pomodoro')
+  expect(narrow).toContain('Pomodoro · work 11/25') // the phase is never shortened
   expect(await chip($)).toBe('T2 ▶ 11/25')
 })
 

@@ -473,33 +473,6 @@ export function planDayContext(status: DayStatus): string | undefined {
   return lines.join(' ')
 }
 
-/**
- * What the band line keeps at a width (G works with 2-3 panes side by side). The task,
- * its timer, Pause and Done always stay; the rest gives way first: the date, then the
- * long forms, then Recap and the progress, then Tasks. Recap and Break are also in the
- * Tasks pane, so nothing hidden here is out of reach.
- */
-export type BandFit = {
-  date: boolean
-  progress: 'long' | 'short' | null
-  recap: boolean
-  tasks: boolean
-  /** `when-due`: Break shows only once 25 minutes of work are up. */
-  break: 'always' | 'when-due'
-  asOf: 'long' | 'short'
-}
-
-export const BAND_WIDE = 100
-export const BAND_MEDIUM = 72
-export const BAND_NARROW = 48
-
-export function bandFit(columns: number): BandFit {
-  if (columns >= BAND_WIDE) return { date: true, progress: 'long', recap: true, tasks: true, break: 'always', asOf: 'long' }
-  if (columns >= BAND_MEDIUM) return { date: false, progress: 'short', recap: true, tasks: true, break: 'always', asOf: 'short' }
-  if (columns >= BAND_NARROW) return { date: false, progress: null, recap: false, tasks: true, break: 'when-due', asOf: 'short' }
-  return { date: false, progress: null, recap: false, tasks: false, break: 'when-due', asOf: 'short' }
-}
-
 /** "1/3": the progress in five characters. */
 export function shortProgress(today: Today): string {
   const live = today.order.filter(id => today.tasks[id]?.status !== 'dropped')
@@ -572,4 +545,97 @@ export function sessionChip(today: Today | undefined, session: string, nowMs: nu
   else if (card.status === 'waiting') label = `${alias} waiting ${clockOf(card.waiting_since ?? null)}`
   else label = `${alias} paused`
   return label.slice(0, 24)
+}
+
+/**
+ * The band line at its real width (G, 2026-10-12: the buttons ran off the edge and a bare
+ * "19/25" said nothing). Each stage gives way a little more until the line fits: first the
+ * task title is cut with an ellipsis, then the other session's task, the date, the long
+ * forms, then the button labels shrink to their key, then the secondary buttons (also in the
+ * Tasks pane) and the progress go. The phase ("Pomodoro · work 19/25") and Tasks never do.
+ */
+export type BandButton = { key: string; label: string; hotkey?: string; keep?: boolean; secondary?: boolean }
+
+export type BandParts = {
+  stale?: string
+  date: string
+  progress: string
+  progressShort: string
+  /** "T3 Answer the five questions": cut first. */
+  title: string
+  /** The rhythm phase in words: never cut. */
+  phase?: string
+  buttons: BandButton[]
+  /** The other session's task ("now: T9 … elsewhere"), the first to go. */
+  extra?: string
+  asOf: string
+  asOfShort: string
+}
+
+export type BandLayout = {
+  date: boolean
+  progress: 'long' | 'short' | null
+  extra: boolean
+  asOf: 'long' | 'short'
+  /** Labels shrunk to their key ("P"); a kept button keeps its label. */
+  compact: boolean
+  /** Buttons left out, by key. */
+  dropped: string[]
+  title: string
+  /** The estimated width of the line as laid out. */
+  width: number
+}
+
+/** Room a button takes beside its label: padding, and the hotkey Desktop draws after it. */
+export const BUTTON_CHROME = 4
+export const TITLE_MIN = 14
+export const TITLE_FLOOR = 6
+
+export function buttonLabel(b: BandButton, compact: boolean): string {
+  return compact && !b.keep && b.hotkey ? b.hotkey.toUpperCase() : b.label
+}
+
+export function cut(text: string, max: number): string {
+  return text.length <= max ? text : `${text.slice(0, Math.max(1, max - 1)).trimEnd()}\u2026`
+}
+
+export function fitBand(columns: number, p: BandParts): BandLayout {
+  const stages: Omit<BandLayout, 'title' | 'width'>[] = []
+  let s: Omit<BandLayout, 'title' | 'width'> = { date: true, progress: 'long', extra: true, asOf: 'long', compact: false, dropped: [] }
+  stages.push(s)
+  s = { ...s, extra: false }; stages.push(s)
+  s = { ...s, date: false }; stages.push(s)
+  s = { ...s, progress: 'short', asOf: 'short' }; stages.push(s)
+  s = { ...s, compact: true }; stages.push(s)
+  s = { ...s, dropped: p.buttons.filter(b => b.secondary).map(b => b.key) }; stages.push(s)
+  s = { ...s, progress: null }; stages.push(s)
+
+  const fixedWidth = (st: Omit<BandLayout, 'title' | 'width'>): number => {
+    const texts = [
+      p.stale,
+      st.date ? p.date : undefined,
+      st.progress === 'long' ? p.progress : st.progress === 'short' ? p.progressShort : undefined,
+      st.date || st.progress ? '\u00b7' : undefined,
+      p.title && p.phase ? '\u00b7' : undefined,
+      p.phase,
+      st.extra ? p.extra : undefined,
+      st.asOf === 'long' ? p.asOf : p.asOfShort,
+    ].filter((t): t is string => !!t)
+    const buttons = p.buttons.filter(b => !st.dropped.includes(b.key))
+    const items = texts.length + buttons.length + 1 // + the title
+    return texts.reduce((n, t) => n + t.length, 0)
+      + buttons.reduce((n, b) => n + buttonLabel(b, st.compact).length + BUTTON_CHROME, 0)
+      + (items - 1) // one gap between items
+  }
+
+  for (const [n, st] of stages.entries()) {
+    const room = columns - fixedWidth(st)
+    const isLast = n === stages.length - 1
+    // The first stage keeps the whole title: the other session's task goes before it is cut.
+    if (room >= (n === 0 ? p.title.length : Math.min(p.title.length, TITLE_MIN)) || isLast) {
+      const title = cut(p.title, Math.max(isLast ? TITLE_FLOOR : TITLE_MIN, Math.min(p.title.length, room)))
+      return { ...st, title, width: fixedWidth(st) + title.length }
+    }
+  }
+  throw new Error('unreachable')
 }

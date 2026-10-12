@@ -29,7 +29,7 @@ test('R17: the band shows date, progress, active task with its time, buttons and
     const line = await text(ui)
     expect(line).toContain('2026-10-12')
     expect(line).toContain('1 of 3 done')
-    expect(line).toContain('T2 Read section 3 41m')
+    expect(line).toContain('T2 Read section 3 · 41m')
     for (const b of ['[Pause]', '[Done]', '[Break', '[Recap]']) expect(line).toContain(b)
     expect(line).toContain('data 09:41')
     await ui.unmount()
@@ -43,7 +43,7 @@ test('R17: the band draws on the first ask of a pane, before any surface has att
   await $.session.start(START)
   expect(w.registeredTools).toEqual([])
   const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
-  expect(await text(ui)).toContain('T2 Read section 3 41m')
+  expect(await text(ui)).toContain('T2 Read section 3 · 41m')
 })
 
 test('R17: the band re-reads today.json on every draw', { options: OPTIONS }, async ($, on) => {
@@ -109,7 +109,7 @@ test('R25: with no rhythm chosen there is no work timer: the band never says a b
   await $.session.start(START)
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
   const line = await text(ui)
-  expect(line).toContain('T2 Read section 3 41m')
+  expect(line).toContain('T2 Read section 3 · 41m')
   expect(line).not.toContain('break due')
   expect(line).not.toContain('time for')
 })

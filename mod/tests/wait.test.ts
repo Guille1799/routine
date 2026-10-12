@@ -67,8 +67,7 @@ test('R39: the band of the session working on it says it waits and since when, s
   await $.session.start(START)
   expect(await text(await $.ui.mount({ ...band(120), surface: 'desktop' }))).toContain('T2 Read section 3 · waiting since 09:30 [Done]')
   const narrow = await text(await $.ui.mount({ ...band(56), surface: 'terminal' }))
-  expect(narrow).toContain('T2 Read section 3 · waiting')
-  expect(narrow).not.toContain('since')
+  expect(narrow).toContain('· waiting since 09:30')
 })
 
 test('R39: the pane marks the waiting task, says since when, and Start brings it back', { options: OPTIONS }, async ($, on) => {
