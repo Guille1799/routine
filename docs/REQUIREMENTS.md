@@ -52,6 +52,7 @@ piece that owns it is being built.
 | R40 | Each task remembers its session; a side task can start straight as waiting | D64 | tests/test_writer.py::test_r40_tasks_remember_the_session_that_works_on_them |
 | R41 | A session's band shows its own task, and the day's active task dimmed when elsewhere | D64 | pending: P3 |
 | R42 | A dropped priority with a reason makes the day a justified exception | D63 | pending: P4 |
+| R43 | Ending or pausing a task with an open drift warning closes it as unanswered | D65 | tests/test_writer.py::test_r43_ending_a_task_with_an_open_drift_warning_closes_it_as_unanswered |
 
 ## Decisions without a requirement
 

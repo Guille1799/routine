@@ -162,6 +162,10 @@ def record(root: Path, etype: str, data: dict | None = None, task: str | None = 
                 raise RuleError(f"{task} is {status}: finished tasks are final; reopen it first")
             if etype == "reopen" and status not in FINAL:
                 raise RuleError(f"only a done or dropped task can be reopened: {task} is {status}")
+            if etype in ("pause", "done", "drop", "wait") and (st["drift"].get(task) or {}).get("open"):
+                # the warning closes as unanswered: that is data too (D65)
+                written.append(_event("drift_reply", today, {"action": "unanswered"},
+                                      task=task, session=session, cwd=cwd))
             if etype == "done" and status == "pending":  # done outside the routine (D57)
                 data["unstarted"] = True
             if etype == "start":

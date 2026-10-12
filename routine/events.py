@@ -103,7 +103,8 @@ def validate(event: dict) -> dict:
             raise EventError("done_when, first_step and perimeter cannot be emptied")
     if etype == "checkpoint" and not str(data.get("note", "")).strip():
         raise EventError("a checkpoint needs a note")
-    if etype == "drift_reply" and data.get("action") not in ("back", "continue"):
+    if etype == "drift_reply" and data.get("action") not in ("back", "continue", "unanswered"):
+        # unanswered: written by the writer when the task is paused or ended with the warning open (D65)
         raise EventError("drift_reply action must be back or continue")
     if etype == "drift_reply" and data.get("action") == "continue" and not data.get("why"):
         raise EventError("continuing after a drift warning needs a reason")

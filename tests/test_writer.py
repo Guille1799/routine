@@ -372,3 +372,14 @@ def test_r40_tasks_remember_the_session_that_works_on_them(root):
     incomplete = add(root, title="x", perimeter="")
     with pytest.raises(writer.RuleError):
         writer.record(root, "wait", task=incomplete, session="s-other")
+
+
+def test_r43_ending_a_task_with_an_open_drift_warning_closes_it_as_unanswered(root):
+    writer.record(root, "open_day", {"mode": "normal"}, day="2026-10-12")
+    t = add(root)
+    writer.record(root, "start", task=t)
+    writer.record(root, "drift_warn", {"message": "about another project"}, task=t)
+    written = writer.record(root, "done", {"fields": {}}, task=t)
+    assert [e["type"] for e in written] == ["drift_reply", "done"]
+    dr = state.current(root)["drift"][t]
+    assert dr["open"] is False and dr["replies"][-1]["action"] == "unanswered"

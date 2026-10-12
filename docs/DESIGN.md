@@ -202,3 +202,4 @@ not decided (D48).
 | D62 | current | a task can wait: its session works alone; waiting counts as paused that moves on (not the user's working time), frees the active slot, never auto-pauses; it comes back with start, or ends with done or drop |
 | D63 | current | a day whose priority was dropped for a good reason counts as a justified exception, neither fulfilled nor failed |
 | D64 | current | the band belongs to its session: each task remembers the session that works on it, and a session's band shows that task (active, paused or waiting) plus, dimmed, the day's active task when it is elsewhere; a slow side task can start straight as waiting in its own session |
+| D65 | current | pausing, waiting, finishing or dropping a task with an open drift warning closes the warning as unanswered, logged as data |
