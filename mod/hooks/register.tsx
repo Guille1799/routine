@@ -111,13 +111,12 @@ async function doneFields($: $): Promise<DoneField[] | string> {
   }
 }
 
-/** Recap (R26, D8): the built-in /recap when this build has one, else a fork over the transcript. */
+/**
+ * Recap (R26, D8): one question over this session's transcript. Never the built-in /recap:
+ * the engine refuses a /recap that a plugin runs ("sent by a routine or another program",
+ * seen 2026-10-12), so the fork is the only way that works from a button.
+ */
 async function recap($: $): Promise<void> {
-  const commands = await $.command.list()
-  if (commands.some(c => c.name === 'recap' && c.source === 'builtin')) {
-    await $.command.run({ command: 'recap' })
-    return
-  }
   const r = await $.model.fork({ prompt: RECAP_PROMPT })
   if (r.isAnswered) $.ui.log(`Recap: ${r.text}`)
   else if (r.reason === 'nothing-to-fork') $.ui.log('Recap: nothing to recap yet in this session.')

@@ -133,19 +133,10 @@ test('R25: at the end of the break, one tap answers the phone question, then a r
   expect(w.logs).toEqual(['Recap: drafted note'])
 })
 
-test('R26: the recap button uses the built-in /recap when this build has one', { options: OPTIONS }, async ($, on) => {
+test('R26: the recap is a fork over this session, never the built-in /recap the engine refuses to a plugin', { options: OPTIONS }, async ($, on) => {
   const w = world(on, { commands: [{ name: 'recap', source: 'builtin' }] })
   await $.session.start(START)
   const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
-  await ui.press({ key: 'recap' })
-  expect(w.ranCommands).toEqual(['recap'])
-  expect(w.forks).toEqual([])
-})
-
-test('R26: without a built-in /recap, the recap is a fork over this session', { options: OPTIONS }, async ($, on) => {
-  const w = world(on, { commands: [{ name: 'recap', source: 'plugin' }] })
-  await $.session.start(START)
-  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
   await ui.press({ key: 'recap' })
   expect(w.ranCommands).toEqual([])
   expect(w.forks).toHaveLength(1)
