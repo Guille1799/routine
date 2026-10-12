@@ -193,3 +193,4 @@ not decided (D48).
 | D55 | principle | user experience comes first: quick, clear and friendly beats complete; every visible change is judged against it |
 | D56 | current, partly open | pause stops at the click; the reason is picked from buttons only, starts as none and can change while the pause lasts; a separate "Leave · save context" writes the drafted checkpoint note |
 | D57 | current | finished (done or dropped) is final: start, done and drop are refused; only reopen, with a reason, brings a task back. Done without start is accepted and marked unstarted |
+| D58 | current | the first prompt of the day asks whether to start the day with /plan-day, once per session per day |

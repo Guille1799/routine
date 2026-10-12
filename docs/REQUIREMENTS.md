@@ -43,8 +43,9 @@ piece that owns it is being built.
 | R31 | Install and uninstall with demo data, leaving nothing behind | D45 | pending: P4 |
 | R32 | The done fields are read from the user's config, not the code | D52 | tests/test_writer.py::test_r32_done_fields_come_from_the_user_config |
 | R33 | The writer CLI has stable exit codes: 0 written, 1 refused, 2 no data folder | D35, D46 | tests/test_writer.py::test_cli_exit_codes |
-| R34 | Finished tasks are final until reopened with a reason; done without start is marked | D57 | tests/test_writer.py::test_d57_finished_tasks_are_final_until_reopened |
+| R35 | Finished tasks are final until reopened with a reason; done without start is marked | D57 | tests/test_writer.py::test_d57_finished_tasks_are_final_until_reopened |
 | R34 | Pause is written at the click; its reason comes from buttons only, starts as none and changes only while the pause lasts; leaving saves the context as its own step | D56 | tests/test_writer.py::test_r34_pause_stops_at_the_click_and_the_reason_is_set_while_it_lasts |
+| R36 | The first prompt of the day asks whether to start the day, once per session per day | D58 | pending: P3 |
 
 ## Decisions without a requirement
 
