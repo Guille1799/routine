@@ -214,3 +214,4 @@ not decided (D48).
 | D68 | current | refines D67: the technique is chosen per task; with none chosen there is no work timer and breaks are taken whenever the user wants; break lengths offered: 5, 10, 15 or 20 minutes |
 | D69 | current | the close commits diary/ and state/ when the data folder is a git repository, never config, and says so; otherwise it says it skipped |
 | D71 | current | the manual (docs/MANUAL.md) is checked against the code by a test: every action, tool action, command, done field kind and setting read from the code must have its row |
+| D73 | current | after a pause, the work phase continues where it was if the pause was shorter than the technique's break, and starts again if it was as long or longer (it counted as a break); today.json gives each task its work_started |

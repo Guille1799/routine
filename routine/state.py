@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from . import paths
@@ -21,6 +22,20 @@ def read_events(path: Path) -> list[dict]:
             except json.JSONDecodeError as exc:
                 raise ValueError(f"{path}:{n} is not valid JSON") from exc
     return events
+
+
+def break_minutes(technique: str | None) -> int | None:
+    """The break length of a technique like "pomodoro 25/5" or "50/10"; None when it has none."""
+    if not technique or "/" not in technique:
+        return None
+    try:
+        return int(technique.rsplit("/", 1)[1].strip())
+    except ValueError:
+        return None
+
+
+def _minutes_between(a: str, b: str) -> float:
+    return (datetime.fromisoformat(b) - datetime.fromisoformat(a)).total_seconds() / 60
 
 
 def fold(events: list[dict]) -> dict:
@@ -49,8 +64,18 @@ def fold(events: list[dict]) -> dict:
         elif t == "start":
             if ev.get("session"):  # the session that works on it (D64): its band shows this task
                 st["tasks"][tid]["session"] = ev["session"]
-            st["tasks"][tid]["status"] = "active"
-            st["tasks"][tid]["since"] = ev["ts"]
+            task = st["tasks"][tid]
+            task["status"] = "active"
+            task["since"] = ev["ts"]
+            # The work phase (D73): a pause shorter than the technique's break continues the
+            # phase where it was; a longer one counted as a break, so a new phase starts.
+            paused_at, worked_from = task.pop("paused_at", None), task.get("work_started")
+            limit = break_minutes(task.get("technique"))
+            if paused_at and worked_from and limit and _minutes_between(paused_at, ev["ts"]) < limit:
+                shift = datetime.fromisoformat(ev["ts"]) - datetime.fromisoformat(paused_at)
+                task["work_started"] = (datetime.fromisoformat(worked_from) + shift).isoformat(timespec="seconds")
+            else:
+                task["work_started"] = ev["ts"]
             st["active"] = tid
             if st["last_paused"] == tid:
                 st["last_paused"] = None
@@ -80,6 +105,7 @@ def fold(events: list[dict]) -> dict:
                 st["active"] = None
             # the task the band offers to resume: the last one paused, while it is still paused
             if t == "pause":
+                task["paused_at"] = ev["ts"]
                 st["last_paused"] = tid
                 task.setdefault("pauses", []).append({"at": ev["ts"], "reason": d.get("reason")})
             elif st["last_paused"] == tid:
@@ -112,6 +138,8 @@ def fold(events: list[dict]) -> dict:
         elif t == "break_end":
             st["break"] = None
             st["last_break_end"] = ev["ts"]  # the work phase restarts here (D67)
+            if st["active"]:
+                st["tasks"][st["active"]]["work_started"] = ev["ts"]
         elif t == "close_day":
             st.update(open=False, closed=True, tomorrow=d.get("tomorrow"), active=None)
     return st

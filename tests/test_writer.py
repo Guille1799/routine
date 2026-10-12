@@ -442,3 +442,19 @@ def test_r46_last_break_end_is_kept_for_the_work_phase(root):
     writer.record(root, "break_start", {"technique": "pomodoro 25/5", "minutes": 5})
     ended = writer.record(root, "break_end", {"phone": False})[-1]["ts"]
     assert state.current(root)["last_break_end"] == ended
+
+
+def test_r49_work_phase_continues_after_a_short_pause_and_restarts_after_a_long_one():
+    def ev(ts, etype, data=None, task="t"):
+        return {"v": 1, "ts": f"2026-10-12T{ts}:00+02:00", "day": "2026-10-12", "type": etype,
+                "task": task, "data": data or {}}
+    base = [ev("09:00", "open_day", {"mode": "normal"}, None),
+            ev("09:00", "task_add", {"title": "x", "technique": "pomodoro 25/5"}),
+            ev("10:00", "start"), ev("10:19", "pause")]
+    short = state.fold(base + [ev("10:21", "start")])["tasks"]["t"]["work_started"]
+    assert short == "2026-10-12T10:02:00+02:00"      # 2-minute pause: still minute 19 of 25
+    long_ = state.fold(base + [ev("12:30", "start")])["tasks"]["t"]["work_started"]
+    assert long_ == "2026-10-12T12:30:00+02:00"      # lunch: a new phase
+    none = state.fold(base[:1] + [ev("09:00", "task_add", {"title": "x"}), ev("10:00", "start"),
+                                  ev("10:19", "pause"), ev("10:21", "start")])["tasks"]["t"]
+    assert none["work_started"] == "2026-10-12T10:21:00+02:00"   # no technique: no carry-over
