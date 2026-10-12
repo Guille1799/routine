@@ -53,6 +53,8 @@ piece that owns it is being built.
 | R41 | A session's band shows its own task, and the day's active task dimmed when elsewhere | D64 | pending: P3 |
 | R42 | A dropped priority with a reason makes the day a justified exception | D63 | pending: P4 |
 | R43 | Ending or pausing a task with an open drift warning closes it as unanswered | D65 | tests/test_writer.py::test_r43_ending_a_task_with_an_open_drift_warning_closes_it_as_unanswered |
+| R44 | Every cell of the state table (6 states x 6 buttons) behaves as specified | D57, D62, D10 | tests/test_writer.py::test_r44_every_cell_of_the_state_table |
+| R45 | Surrounding conditions: break with no task, start ends a break, close pauses and ends breaks, one priority | D66 | tests/test_writer.py::test_r45_surrounding_conditions |
 
 ## Decisions without a requirement
 

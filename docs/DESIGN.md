@@ -203,3 +203,4 @@ not decided (D48).
 | D63 | current | a day whose priority was dropped for a good reason counts as a justified exception, neither fulfilled nor failed |
 | D64 | current | the band belongs to its session: each task remembers the session that works on it, and a session's band shows that task (active, paused or waiting) plus, dimmed, the day's active task when it is elsewhere; a slow side task can start straight as waiting in its own session |
 | D65 | current | pausing, waiting, finishing or dropping a task with an open drift warning closes the warning as unanswered, logged as data |
+| D66 | current | surrounding rules: a break can start with zero, one or more tasks running; starting a task ends a break; closing the day pauses the active task and ends a break; one priority a day, a new one replaces the old |
