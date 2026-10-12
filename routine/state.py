@@ -28,6 +28,7 @@ def fold(events: list[dict]) -> dict:
     st: dict = {
         "day": None, "open": False, "closed": False, "mode": None, "hours": None,
         "tasks": {}, "order": [], "active": None, "last_paused": None, "inbox": {}, "break": None,
+        "last_break_end": None,
         "drift": {}, "tomorrow": None, "last_ts": None,
     }
     for ev in events:
@@ -110,6 +111,7 @@ def fold(events: list[dict]) -> dict:
                            "since": ev["ts"]}
         elif t == "break_end":
             st["break"] = None
+            st["last_break_end"] = ev["ts"]  # the work phase restarts here (D67)
         elif t == "close_day":
             st.update(open=False, closed=True, tomorrow=d.get("tomorrow"), active=None)
     return st

@@ -434,3 +434,11 @@ def test_r45_surrounding_conditions(root):
     writer.record(root, "close_day")                                     # nothing runs overnight
     st = state.current(root)
     assert st["tasks"][a]["status"] == "paused" and st["break"] is None
+
+
+def test_r46_last_break_end_is_kept_for_the_work_phase(root):
+    writer.record(root, "open_day", {"mode": "normal"}, day="2026-10-12")
+    assert state.current(root)["last_break_end"] is None
+    writer.record(root, "break_start", {"technique": "pomodoro 25/5", "minutes": 5})
+    ended = writer.record(root, "break_end", {"phone": False})[-1]["ts"]
+    assert state.current(root)["last_break_end"] == ended
