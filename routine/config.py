@@ -40,3 +40,21 @@ def done_fields(root: Path) -> list[dict]:
             raise ConfigError(f"field {fid}: buttons need options")
         seen.add(fid)
     return fields
+
+
+# Settings the user may change in <data>/config/routine.toml; the file is optional.
+SETTINGS_DEFAULTS = {"idle_pause_minutes": 20}   # D59; 0 turns the automatic pause off
+
+
+def settings(root: Path) -> dict:
+    """routine.toml merged over the defaults. A missing file means the defaults."""
+    path = paths.config_dir(root) / "routine.toml"
+    raw = _load(root, "routine.toml") if path.exists() else {}
+    unknown = sorted(set(raw) - set(SETTINGS_DEFAULTS))
+    if unknown:
+        raise ConfigError(f"unknown settings in routine.toml: {', '.join(unknown)}")
+    out = {**SETTINGS_DEFAULTS, **raw}
+    m = out["idle_pause_minutes"]
+    if not isinstance(m, int) or isinstance(m, bool) or m < 0:
+        raise ConfigError("idle_pause_minutes must be a whole number of minutes, 0 or more")
+    return out

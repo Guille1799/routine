@@ -5,6 +5,7 @@ session through Bash) uses this, never the files directly.
     python -m routine status      # prints today.json
     python -m routine view        # prints the day as markdown
     python -m routine fields      # prints config/done_fields.toml as JSON
+    python -m routine settings    # prints config/routine.toml merged over the defaults
     python -m routine refresh     # rebuilds today.json from the diary (the mod, at load)
     python -m routine inventory   # writes inventory/YYYY-MM-DD.json (piece P2)
 
@@ -25,7 +26,7 @@ ACTIONS = sorted(t.replace("_", "-") for t in events.TYPES)
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="routine", description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("action", choices=ACTIONS + ["status", "view", "fields", "inventory", "refresh"])
+    p.add_argument("action", choices=ACTIONS + ["status", "view", "fields", "settings", "inventory", "refresh"])
     p.add_argument("--task")
     p.add_argument("--data", default="{}", help="JSON object with the event fields")
     p.add_argument("--session")
@@ -55,6 +56,14 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False))
             return 1
         print(json.dumps({"ok": True, "fields": fields}, ensure_ascii=False))
+        return 0
+    if args.action == "settings":
+        try:
+            values = config.settings(root)
+        except config.ConfigError as exc:
+            print(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False))
+            return 1
+        print(json.dumps({"ok": True, "settings": values}, ensure_ascii=False))
         return 0
     if args.action == "inventory":
         code, result = inventory.main(root, day=args.day)

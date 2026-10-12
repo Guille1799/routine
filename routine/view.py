@@ -1,7 +1,7 @@
 """The day as a readable markdown sheet. A view of the events, never edited by hand."""
 from __future__ import annotations
 
-STATUS_MARK = {"pending": "[ ]", "active": "[>]", "paused": "[~]", "done": "[x]",
+STATUS_MARK = {"pending": "[ ]", "active": "[>]", "paused": "[~]", "waiting": "[…]", "done": "[x]",
                "dropped": "[-]"}
 
 

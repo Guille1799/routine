@@ -325,3 +325,38 @@ def test_d59_idle_is_a_valid_pause_reason(root):
     writer.record(root, "start", task=t)
     writer.record(root, "pause", {"reason": "idle"}, task=t)
     assert state.current(root)["tasks"][t]["status"] == "paused"
+
+
+def test_r39_waiting_is_paused_that_moves_on_and_frees_the_active_slot(root):
+    writer.record(root, "open_day", {"mode": "normal"}, day="2026-10-12")
+    a, b = add(root), add(root, title="other")
+    with pytest.raises(writer.RuleError):           # a pending task cannot wait
+        writer.record(root, "wait", task=a)
+    writer.record(root, "start", task=a)
+    writer.record(root, "wait", task=a)
+    st = state.current(root)
+    assert st["tasks"][a]["status"] == "waiting" and st["active"] is None
+    writer.record(root, "start", task=b)           # starting another does not touch the waiting one
+    st = state.current(root)
+    assert st["active"] == b and st["tasks"][a]["status"] == "waiting"
+    with pytest.raises(writer.RuleError):           # a waiting task is not paused, it is waiting
+        writer.record(root, "pause", task=a)
+    writer.record(root, "start", task=a)           # back to it: b is auto-paused, as always
+    st = state.current(root)
+    assert st["active"] == a and st["tasks"][b]["status"] == "paused"
+    writer.record(root, "wait", task=a)
+    writer.record(root, "done", {"fields": {}}, task=a)
+    assert state.current(root)["tasks"][a]["status"] == "done"
+
+
+def test_r38_settings_have_defaults_and_refuse_bad_values(root):
+    from routine import config
+    assert config.settings(root) == {"idle_pause_minutes": 20}          # no file: defaults
+    (root / "config").mkdir(exist_ok=True)
+    f = root / "config" / "routine.toml"
+    f.write_text("idle_pause_minutes = 0", encoding="utf-8")
+    assert config.settings(root)["idle_pause_minutes"] == 0
+    for bad in ('idle_pause_minutes = -1', 'idle_pause_minutes = "20"', 'idle_pause = 5'):
+        f.write_text(bad, encoding="utf-8")
+        with pytest.raises(config.ConfigError):
+            config.settings(root)

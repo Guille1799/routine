@@ -31,6 +31,7 @@ TYPES: dict[str, tuple[tuple[str, ...], bool]] = {
     "checkpoint": (("note",), True),       # leaving: what was done, where I stopped, next step (D47, D56)
     "done": (("fields",), True),           # fields: the configurable done row (D52)
     "drop": ((), True),
+    "wait": ((), True),                    # a session works alone on it: paused that moves on (D62)
     "reopen": (("why",), True),            # the only way back from done or dropped (D57)
     "inbox": (("text",), False),           # one capture point during the day (D26)
     "inbox_sorted": (("item", "to"), False),

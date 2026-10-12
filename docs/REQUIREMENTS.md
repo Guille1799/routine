@@ -48,6 +48,7 @@ piece that owns it is being built.
 | R36 | The first prompt of the day asks whether to start the day, once per session per day | D58 | tests/test_mod.py::test_r36_ask_to_start_the_day_once_per_session_per_day |
 | R37 | Task cards can be edited, never emptied of their start fields | D61 | tests/test_writer.py::test_r37_task_card_can_be_edited_but_not_emptied |
 | R38 | Automatic pause after idle minutes, configurable, reason idle | D59 | tests/test_mod.py::test_r38_idle_pause_after_configured_minutes |
+| R39 | A task can wait (paused that moves on), freeing the active slot | D62 | tests/test_writer.py::test_r39_waiting_is_paused_that_moves_on_and_frees_the_active_slot |
 
 ## Decisions without a requirement
 

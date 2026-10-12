@@ -199,3 +199,4 @@ not decided (D48).
 | D59 | current | automatic pause after N idle minutes counted from the end of the session's last answer; configurable; reason idle |
 | D60 | process | new tasks are launched as sessions by the lead session when the user asks |
 | D61 | current | a task card can be edited (title, done when, first step, perimeter, kind, project, priority) but its three start fields cannot be emptied |
+| D62 | current | a task can wait: its session works alone; waiting counts as paused that moves on (not the user's working time), frees the active slot, never auto-pauses; it comes back with start, or ends with done or drop |
