@@ -45,8 +45,9 @@ TYPES: dict[str, tuple[tuple[str, ...], bool]] = {
 
 # Why a pause happened, from buttons only so they can be counted (D56). No reason is
 # stored as no reason: "other" is the user's pick, never a default.
-PAUSE_REASONS = ("planned", "interrupted", "blocked", "switched", "low energy", "lost focus", "other",
-                 "idle")  # idle: set only by the automatic pause (D59), never offered as a button
+PAUSE_REASONS = ("planned", "interrupted", "blocked", "switched", "low energy", "lost focus", "other")
+# Reasons only the system writes, never offered as buttons: idle = the automatic pause (D59).
+SYSTEM_PAUSE_REASONS = ("idle",)
 
 # Kinds that describe the user's attention never become reusable "said" text (D44).
 PRIVATE_SAID_KINDS = {"drift_reply", "mode", "attention"}
@@ -88,7 +89,7 @@ def validate(event: dict) -> dict:
         raise EventError(f"{etype} is missing: {', '.join(missing)}")
     if etype == "said" and data.get("kind") in PRIVATE_SAID_KINDS:
         raise EventError("attention data is never stored as reusable text")
-    if etype in ("pause", "pause_reason") and "reason" in data and data["reason"] not in PAUSE_REASONS:
+    if etype in ("pause", "pause_reason") and "reason" in data and data["reason"] not in PAUSE_REASONS + SYSTEM_PAUSE_REASONS:
         raise EventError(f"unknown pause reason: {data['reason']!r}")
     if etype == "task_edit":
         changes = data.get("changes")
