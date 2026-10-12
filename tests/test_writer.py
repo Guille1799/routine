@@ -325,3 +325,25 @@ def test_d59_idle_is_a_valid_pause_reason(root):
     writer.record(root, "start", task=t)
     writer.record(root, "pause", {"reason": "idle"}, task=t)
     assert state.current(root)["tasks"][t]["status"] == "paused"
+
+
+def test_r39_waiting_is_paused_that_moves_on_and_frees_the_active_slot(root):
+    writer.record(root, "open_day", {"mode": "normal"}, day="2026-10-12")
+    a, b = add(root), add(root, title="other")
+    with pytest.raises(writer.RuleError):           # a pending task cannot wait
+        writer.record(root, "wait", task=a)
+    writer.record(root, "start", task=a)
+    writer.record(root, "wait", task=a)
+    st = state.current(root)
+    assert st["tasks"][a]["status"] == "waiting" and st["active"] is None
+    writer.record(root, "start", task=b)           # starting another does not touch the waiting one
+    st = state.current(root)
+    assert st["active"] == b and st["tasks"][a]["status"] == "waiting"
+    with pytest.raises(writer.RuleError):           # a waiting task is not paused, it is waiting
+        writer.record(root, "pause", task=a)
+    writer.record(root, "start", task=a)           # back to it: b is auto-paused, as always
+    st = state.current(root)
+    assert st["active"] == a and st["tasks"][b]["status"] == "paused"
+    writer.record(root, "wait", task=a)
+    writer.record(root, "done", {"fields": {}}, task=a)
+    assert state.current(root)["tasks"][a]["status"] == "done"

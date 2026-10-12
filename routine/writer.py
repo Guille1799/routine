@@ -154,7 +154,7 @@ def record(root: Path, etype: str, data: dict | None = None, task: str | None = 
                 if task in st["tasks"]:
                     raise RuleError(f"task {task} already exists today")
             elif etype in ("start", "pause", "pause_reason", "checkpoint", "done", "drop",
-                           "reopen", "task_edit", "drift_warn", "drift_reply"):
+                           "reopen", "task_edit", "wait", "drift_warn", "drift_reply"):
                 if task not in st["tasks"]:
                     raise RuleError(f"unknown task for today: {task}")
             status = st["tasks"][task]["status"] if task in st["tasks"] else None
@@ -174,6 +174,8 @@ def record(root: Path, etype: str, data: dict | None = None, task: str | None = 
                                           {"note": "auto-paused: another task started",
                                            "reason": "switched"},
                                           task=st["active"], session=session, cwd=cwd))
+            if etype == "wait" and status not in ("active", "paused"):
+                raise RuleError(f"only an active or paused task can wait: {task} is {status} (D62)")
             if etype == "pause" and st["tasks"][task]["status"] != "active":
                 raise RuleError(f"only the active task can be paused: {task} is {st['tasks'][task]['status']}")
             if etype == "pause_reason" and not (st["last_paused"] == task
