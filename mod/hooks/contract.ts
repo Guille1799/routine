@@ -23,6 +23,7 @@ export const WRITER_CALLS: Record<string, WriterCall> = /* contract:start */ {
   "pause_click": { "action": "pause", "task": "$task", "data": {} },
   "pause_reason": { "action": "pause_reason", "task": "$task", "data": { "reason": "interrupted" } },
   "pause_idle": { "action": "pause", "task": "$task", "data": { "reason": "idle" } },
+  "wait": { "action": "wait", "task": "$task" },
   "checkpoint": { "action": "checkpoint", "task": "$task", "data": { "note": "read 3.2; stopped at the figure; next: section 4" } },
   "reopen": { "action": "reopen", "task": "$task", "data": { "why": "one more check after the review" } },
   "done": { "action": "done", "task": "$task", "data": { "fields": { "rating": "🔥", "learned_how": "reading", "drifted": false, "phone": false, "note": "notes written; next: section 4" }, "note": "notes written; next: section 4" } }

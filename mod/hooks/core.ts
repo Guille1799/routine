@@ -12,12 +12,12 @@ export type Card = {
   project?: string
   priority?: boolean
   last_note?: string
-  status: 'pending' | 'active' | 'paused' | 'done' | 'dropped'
+  status: 'pending' | 'active' | 'paused' | 'waiting' | 'done' | 'dropped'
   carried?: number
   notes?: string[]
   since?: string
-  /** A task waiting on something outside (not built yet): never paused for idleness (D59). */
-  waiting?: boolean
+  /** When the task started waiting (D62): a session works alone on it, the active slot is free. */
+  waiting_since?: string
   /** Every pause, at the click; reason null until the user picks one (D56). */
   pauses?: { at: string; reason: string | null }[]
 }
@@ -51,7 +51,7 @@ export type FieldValue = string | boolean
 
 // The writer CLI's actions this mod uses. The CLI spells them with dashes.
 export type WriterAction =
-  | 'start' | 'pause' | 'pause_reason' | 'checkpoint' | 'done' | 'reopen' | 'task_edit' | 'drift_warn' | 'drift_reply'
+  | 'start' | 'pause' | 'pause_reason' | 'checkpoint' | 'wait' | 'done' | 'reopen' | 'task_edit' | 'drift_warn' | 'drift_reply'
   | 'inbox' | 'said' | 'break_start' | 'break_end' | 'usage'
 
 export type WriterCall = {
@@ -158,6 +158,8 @@ export type Band = {
   /** With no active task, the task paused last: the band offers Resume. */
   resume?: { id: string; alias: string; title: string; reason: string | null }
   break?: { leftMin: number; isOver: boolean }
+  /** Tasks a session works on alone (D62), in today's order. */
+  waiting: { id: string; alias: string; since: string }[]
   asOf: string
 }
 
@@ -169,6 +171,9 @@ export function band(today: Today, nowMs: number): Band {
     date: today.day ?? '',
     progress: `${done} of ${live.length} done`,
     asOf: clockOf(today.last_ts),
+    waiting: today.order
+      .filter(id => today.tasks[id]?.status === 'waiting')
+      .map(id => ({ id, alias: aliasOf(today, id), since: clockOf(today.tasks[id]?.waiting_since ?? null) })),
   }
   const left = breakLeftMs(today.break, nowMs)
   if (left !== undefined) {
@@ -192,7 +197,7 @@ export function band(today: Today, nowMs: number): Band {
 }
 
 const MARK: Record<Card['status'], string> = {
-  pending: '[ ]', active: '[>]', paused: '[~]', done: '[x]', dropped: '[-]',
+  pending: '[ ]', active: '[>]', paused: '[~]', waiting: '[w]', done: '[x]', dropped: '[-]',
 }
 
 export function taskList(today: Today): string {
@@ -211,8 +216,12 @@ export type TaskRow = {
   carried: number
   /** The day's one priority (D10). */
   priority: boolean
-  /** What the row offers: start a pending or paused task, finish the active one, reopen a finished one (D57). */
+  /** What the row offers: start a pending, paused or waiting task, finish the active one, reopen a finished one (D57). */
   action: 'start' | 'done' | 'reopen' | null
+  /** The active and paused tasks can be set waiting (D62). */
+  canWait: boolean
+  /** For a waiting task, since when (HH:MM). */
+  waitingSince?: string
 }
 
 /** Today's full list for the pane, in today's order (the expanded band). */
@@ -229,7 +238,9 @@ export function taskRows(today: Today): TaskRow[] {
       firstStep: t?.first_step,
       carried: t?.carried ?? 0,
       priority: t?.priority === true,
-      action: status === 'active' ? 'done' : status === 'pending' || status === 'paused' ? 'start' : 'reopen',
+      action: status === 'active' ? 'done' : status === 'pending' || status === 'paused' || status === 'waiting' ? 'start' : 'reopen',
+      canWait: status === 'active' || status === 'paused',
+      waitingSince: status === 'waiting' ? clockOf(t?.waiting_since ?? null) : undefined,
     }
   })
 }
@@ -405,7 +416,7 @@ export function shortProgress(today: Today): string {
  * The automatic pause (D59): after `minutes` idle minutes, counted from the latest of
  * this session's last answer, the diary's last event (any session's activity) and the
  * task's start, the active task is paused with the reason `idle`. Nothing to do when it
- * is off (0), no day is open, no task is active, the task is waiting, or a break runs.
+ * is off (0), no day is open, no task is active (a waiting one never is), or a break runs.
  */
 export type IdleDue = { kind: 'off' } | { kind: 'wait'; ms: number } | { kind: 'pause'; task: string }
 
@@ -414,7 +425,7 @@ export const IDLE_DEFAULT_MINUTES = 20
 export function idleDue(today: Today | undefined, lastAnswerAt: number, minutes: number, nowMs: number): IdleDue {
   if (!today?.open || !today.active || minutes <= 0 || today.break) return { kind: 'off' }
   const card = today.tasks[today.active]
-  if (!card || card.status !== 'active' || card.waiting) return { kind: 'off' }
+  if (!card || card.status !== 'active') return { kind: 'off' } // a waiting task is never the active one (D62)
   const seen = [lastAnswerAt, today.last_ts ? Date.parse(today.last_ts) : 0, card.since ? Date.parse(card.since) : 0]
   const due = Math.max(...seen.filter(Number.isFinite)) + minutes * 60000
   return nowMs >= due ? { kind: 'pause', task: today.active } : { kind: 'wait', ms: due - nowMs }

@@ -73,10 +73,17 @@ test('R38: N comes from the config; 0 turns it off, and an unreadable config nev
   expect(idlePauses(w)).toEqual([])
 })
 
-const waiting = today()
-waiting.tasks[ACTIVE] = { ...waiting.tasks[ACTIVE]!, waiting: true }
+/** T2 waits (D62): a session works on it alone, so the active slot is free. */
+function waitingT2(active: string | null) {
+  const t = today({ active })
+  t.tasks[ACTIVE] = { ...t.tasks[ACTIVE]!, status: 'waiting', waiting_since: '2026-10-12T09:30:00+02:00' }
+  delete t.tasks[ACTIVE]!.since
+  if (active) t.tasks[active] = { ...t.tasks[active]!, status: 'active', since: '2026-10-12T09:35:00+02:00' }
+  return t
+}
+
 const QUIET = {
-  'a waiting task': waiting,
+  'a waiting task': waitingT2(null),
   'a break': today({ break: { technique: 'pomodoro', minutes: 5, since: '2026-10-12T09:41:00+02:00' } }),
   'no active task': today({ active: null }),
 }
@@ -89,6 +96,14 @@ for (const [name, state] of Object.entries(QUIET)) {
     expect(idlePauses(w)).toEqual([])
   })
 }
+
+test('R38: with T2 waiting and T3 active, the idle pause stops T3 and leaves T2 waiting', { options: OPTIONS }, async ($, on) => {
+  const w = world(on, { today: waitingT2('t-20261012-cccccc') })
+  await $.session.start(START)
+  await answered($)
+  await w.clock.advance(20 * MIN)
+  expect(idlePauses(w)).toEqual([argvOf(C.pause_idle!, 't-20261012-cccccc')])
+})
 
 test('R38: a subagent finishing is not the session answering', { options: OPTIONS }, async ($, on) => {
   const w = world(on)

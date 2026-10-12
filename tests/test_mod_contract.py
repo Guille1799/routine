@@ -22,7 +22,7 @@ REPO = Path(__file__).resolve().parent.parent
 CONTRACT = REPO / "mod" / "hooks" / "contract.ts"
 # The order a day would see them in; every contract entry must appear here.
 SCENARIO = ["task_edit", "start", "drift_warn", "drift_reply", "inbox", "said", "break_start", "break_end",
-            "usage", "pause", "start", "pause_click", "pause_reason", "checkpoint", "start", "pause_idle", "start", "done",
+            "usage", "pause", "start", "pause_click", "pause_reason", "checkpoint", "start", "pause_idle", "start", "wait", "start", "done",
             "reopen"]
 
 
@@ -105,3 +105,17 @@ def test_r32_the_fields_the_mod_reads_come_from_the_config(data):
     assert fields[-1]["prefill"] == "session"
     # the done call in the contract carries exactly these fields
     assert set(contract()["done"]["data"]["fields"]) == {f["id"] for f in fields}
+
+
+def test_r38_the_settings_the_mod_reads_come_from_the_config(data):
+    """The mod reads `python -m routine settings` as {"settings": {"idle_pause_minutes": n}}
+    (mod/hooks/register.tsx idleMinutes): defaults without a file, the user's value with one."""
+    base = [sys.executable, "-m", "routine", "settings"]
+    out = run(base, data)
+    assert out.returncode == 0, out.stdout
+    assert json.loads(out.stdout)["settings"]["idle_pause_minutes"] == 20
+    (data / "config").mkdir()
+    (data / "config" / "routine.toml").write_text("idle_pause_minutes = 0\n", encoding="utf-8")
+    assert json.loads(run(base, data).stdout)["settings"]["idle_pause_minutes"] == 0
+    (data / "config" / "routine.toml").write_text("idle_pause_minutes = true\n", encoding="utf-8")
+    assert run(base, data).returncode == 1  # the mod then keeps the idle pause off

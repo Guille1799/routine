@@ -247,6 +247,12 @@ async function setPriority($: $, task: string, priority: boolean): Promise<void>
   if (!out.ok) $.ui.toast(`Priority: ${out.error}`)
 }
 
+/** The task goes on alone in a session (D62): the active slot is free for another. */
+async function waitTask($: $, task: string): Promise<void> {
+  const out = await write($, { action: 'wait', task })
+  if (!out.ok) $.ui.toast(`Wait: ${out.error}`)
+}
+
 async function startBreak($: $, n: number): Promise<void> {
   const choice = BREAKS[n] ?? BREAKS[0]!
   await update($, breakPick, () => false)
@@ -324,14 +330,14 @@ async function setup($: $): Promise<void> {
     name: 'routine',
     description:
       "The user's daily routine: one active task at a time. Call it when the user starts, pauses or finishes a task " +
-      '("let\'s do T2", "pause", "done", "reopen T1"), when a message drifts outside the active task\'s perimeter, ' +
+      '("let\'s do T2", "pause", "T2 can run on its own" = wait, "done", "reopen T1"), when a message drifts outside the active task\'s perimeter, ' +
       'to capture an idea to the inbox, or to keep something the user said. "T2" is the 2nd task of today.',
     inputSchema: {
       type: 'object',
       properties: {
         action: {
           type: 'string',
-          enum: ['start', 'pause', 'done', 'reopen', 'edit', 'drift_warn', 'drift_reply', 'inbox', 'said', 'status'],
+          enum: ['start', 'pause', 'wait', 'done', 'reopen', 'edit', 'drift_warn', 'drift_reply', 'inbox', 'said', 'status'],
         },
         task: { type: 'string', description: 'T1, T2... or the task id; default: the active task' },
         note: { type: 'string', description: 'pause/done: what was done, where it stopped, next step (you draft it)' },
@@ -543,6 +549,11 @@ export const register: Register = (on, options) => {
         if (!note) return { deny: 'routine: a pause needs a note: what was done, where it stopped, the next step' }
         return done(await write($, { action: 'pause', task, data: { note } }), `Paused ${aliasOf(today, task)}.`)
       }
+      case 'wait': {
+        // D62: a session works on it alone; the writer accepts it from active or paused.
+        if (!task) return { deny: 'routine: which task waits? Name it, e.g. T2' }
+        return done(await write($, { action: 'wait', task }), `${aliasOf(today, task)} is waiting: the active slot is free.`)
+      }
       case 'done': {
         if (!task) return { deny: 'routine: no active task to finish' }
         const fields = await doneFields($)
@@ -673,6 +684,14 @@ export const register: Register = (on, options) => {
           {b.resume && <Button key="resume" label="Resume" hotkey="s" variant="primary" onPress={() => startTask($, b.resume!.id)} />}
           {b.task && <Button key="pause" label="Pause" hotkey="p" onPress={() => pauseNow($)} />}
           {b.task && <Button key="done" label="Done" hotkey="d" onPress={() => openForm($, 'done')} />}
+          {b.task && fit.recap && <Button key="wait" label="Wait" hotkey="w" onPress={() => waitTask($, r.today!.active!)} />}
+          {b.waiting.length > 0 && (
+            <Text dimColor>
+              {fit.date
+                ? `waiting: ${b.waiting.map(x => `${x.alias} since ${x.since}`).join(', ')}`
+                : `wait ${b.waiting.map(x => x.alias).join(' ')}`}
+            </Text>
+          )}
           {(fit.break === 'always' || due) && (
             <Button
               key="break"
@@ -734,6 +753,7 @@ export const register: Register = (on, options) => {
               {row.action === 'done' && (
                 <Button key={`done-${row.id}`} label="Done" variant="primary" onPress={() => openForm($, 'done')} />
               )}
+              {row.canWait && <Button key={`wait-${row.id}`} label="Wait" onPress={() => waitTask($, row.id)} />}
               {row.action !== 'reopen' && Input && ed?.task !== row.id && (
                 <Button key={`edit-${row.id}`} label="Edit" onPress={() => update($, editing, () => ({ task: row.id, values: {}, error: null }))} />
               )}
@@ -770,6 +790,7 @@ export const register: Register = (on, options) => {
                 {asking.error ? <Text color="red"> {asking.error}</Text> : null}
               </Box>
             )}
+            {row.waitingSince && <Text dimColor>    waiting since {row.waitingSince}</Text>}
             {row.doneWhen && <Text dimColor>    done when: {row.doneWhen}</Text>}
             {row.firstStep && <Text dimColor>    first step: {row.firstStep}</Text>}
           </Box>
