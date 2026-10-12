@@ -362,3 +362,36 @@ export function planDayContext(status: DayStatus): string | undefined {
   if (status.kind === 'stale') lines.push(`Day ${status.openDay} is still open: /plan-day closes it first.`)
   return lines.join(' ')
 }
+
+/**
+ * What the band line keeps at a width (G works with 2-3 panes side by side). The task,
+ * its timer, Pause and Done always stay; the rest gives way first: the date, then the
+ * long forms, then Recap and the progress, then Tasks. Recap and Break are also in the
+ * Tasks pane, so nothing hidden here is out of reach.
+ */
+export type BandFit = {
+  date: boolean
+  progress: 'long' | 'short' | null
+  recap: boolean
+  tasks: boolean
+  /** `when-due`: Break shows only once 25 minutes of work are up. */
+  break: 'always' | 'when-due'
+  asOf: 'long' | 'short'
+}
+
+export const BAND_WIDE = 100
+export const BAND_MEDIUM = 72
+export const BAND_NARROW = 48
+
+export function bandFit(columns: number): BandFit {
+  if (columns >= BAND_WIDE) return { date: true, progress: 'long', recap: true, tasks: true, break: 'always', asOf: 'long' }
+  if (columns >= BAND_MEDIUM) return { date: false, progress: 'short', recap: true, tasks: true, break: 'always', asOf: 'short' }
+  if (columns >= BAND_NARROW) return { date: false, progress: null, recap: false, tasks: true, break: 'when-due', asOf: 'short' }
+  return { date: false, progress: null, recap: false, tasks: false, break: 'when-due', asOf: 'short' }
+}
+
+/** "1/3": the progress in five characters. */
+export function shortProgress(today: Today): string {
+  const live = today.order.filter(id => today.tasks[id]?.status !== 'dropped')
+  return `${live.filter(id => today.tasks[id]?.status === 'done').length}/${live.length}`
+}

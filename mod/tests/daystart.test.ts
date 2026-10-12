@@ -19,7 +19,7 @@ async function bandText(ui: { drawn: () => Promise<unknown> }): Promise<string> 
     else if (n && typeof n === 'object') for (const c of (n as { children?: unknown[] }).children ?? []) walk(c)
   }
   walk(await ui.drawn())
-  return parts.join('')
+  return parts.join(' ').replace(/\s+/g, ' ') // siblings sit a gap apart
 }
 
 test('plan-day: with no diary the session asks once, and the band points to /plan-day', { options: OPTIONS }, async ($, on) => {
@@ -54,7 +54,7 @@ test('plan-day: yesterday still open: /plan-day closes it first, and the task co
   expect(second).not.toContain(ASK)
   expect(second).toContain('Active task T2: Read section 3')
   const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
-  expect(await bandText(ui)).toContain('2026-10-11 still open · /plan-day · ')
+  expect(await bandText(ui)).toContain('2026-10-11 still open · /plan-day 2026-10-11')
 })
 
 test('plan-day: a day open for today asks nothing', { options: OPTIONS }, async ($, on) => {

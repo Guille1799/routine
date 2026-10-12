@@ -10,6 +10,7 @@ import {
   PAUSE_REASONS,
   askFor,
   band,
+  bandFit,
   clockOf,
   cleanFields,
   dayStatus,
@@ -20,6 +21,7 @@ import {
   promptContext,
   readWriterAnswer,
   resolveTask,
+  shortProgress,
   aliasOf,
   taskList,
   taskRows,
@@ -543,50 +545,64 @@ export const register: Register = (on, options) => {
         </Box>
       )
     }
-    const stale = day.kind === 'stale' ? <Text color="yellow">{day.openDay} still open · /plan-day · </Text> : null
+    const stale = day.kind === 'stale' ? <Text color="yellow">{day.openDay} still open · /plan-day</Text> : null
 
+    const fit = bandFit(e.props.bodyColumns)
+    const dot = <Text dimColor>·</Text>
+    const asOfShort = <Text dimColor>{fit.asOf === 'long' ? `data ${b.asOf}` : b.asOf}</Text>
+    const head = [
+      stale,
+      fit.date ? <Text dimColor>{b.date}</Text> : null,
+      fit.progress ? <Text dimColor>{fit.progress === 'long' ? b.progress : shortProgress(r.today)}</Text> : null,
+    ].filter(x => x !== null)
     let line
     if (b.break) {
       line = b.break.isOver ? (
-        <Box key="line">
-          <Text>Break over. Phone during the break? </Text>
+        <Box key="line" columnGap={1}>
+          <Text>{fit.date ? 'Break over. Phone during the break?' : 'Phone in the break?'}</Text>
           <Button key="phone-yes" label="Yes" onPress={() => endBreak($, true)} />
           <Button key="phone-no" label="No" variant="primary" onPress={() => endBreak($, false)} />
-          {asOf}
+          {asOfShort}
         </Box>
       ) : (
-        <Box key="line">
-          <Text dimColor>{b.date} · {b.progress} · </Text>
-          <Text>break: {b.break.leftMin}m left </Text>
+        <Box key="line" columnGap={1}>
+          {head}
+          <Text>{`break: ${b.break.leftMin}m left`}</Text>
           <Button key="phone-no" label="End break" onPress={() => endBreak($, false)} />
-          {asOf}
+          {asOfShort}
         </Box>
       )
     } else {
+      const due = b.task?.breakDue === true
       line = (
-        <Box key="line">
-          {stale}
-          <Text dimColor>{b.date} · {b.progress} · </Text>
+        <Box key="line" columnGap={1} flexWrap="nowrap">
+          {head}
+          {head.length > 0 ? dot : null}
           {b.task ? (
-            <Text bold>{b.task.alias} {b.task.title}{b.task.elapsed ? ` · ${b.task.elapsed}` : ''} </Text>
+            <Box key="task" columnGap={1} flexShrink={1}>
+              <Text bold wrap="truncate-end">{b.task.alias} {b.task.title}</Text>
+              {b.task.elapsed ? <Text bold>{b.task.elapsed}</Text> : null}
+            </Box>
           ) : b.resume ? (
-            <Text dimColor>{b.resume.alias} {b.resume.title} · paused </Text>
+            <Text dimColor wrap="truncate-end">{b.resume.alias} {b.resume.title} · paused</Text>
           ) : (
-            <Text dimColor>no active task </Text>
+            <Text dimColor>no active task</Text>
           )}
           {b.resume && <Button key="resume" label="Resume" hotkey="s" variant="primary" onPress={() => startTask($, b.resume!.id)} />}
           {b.task && <Button key="pause" label="Pause" hotkey="p" onPress={() => pauseNow($)} />}
           {b.task && <Button key="done" label="Done" hotkey="d" onPress={() => openForm($, 'done')} />}
-          <Button
-            key="break"
-            label={b.task?.breakDue ? 'Break (25m up)' : 'Break'}
-            hotkey="b"
-            variant={b.task?.breakDue ? 'primary' : undefined}
-            onPress={() => update($, breakPick, v => !v)}
-          />
-          <Button key="recap" label="Recap" hotkey="r" onPress={() => recap($)} />
-          <Button key="tasks" label="Tasks" hotkey="t" onPress={() => void $.ui.open({ id: PANE, title: 'Today' })} />
-          {asOf}
+          {(fit.break === 'always' || due) && (
+            <Button
+              key="break"
+              label={due && fit.date ? 'Break (25m up)' : 'Break'}
+              hotkey="b"
+              variant={due ? 'primary' : undefined}
+              onPress={() => update($, breakPick, v => !v)}
+            />
+          )}
+          {fit.recap && <Button key="recap" label="Recap" hotkey="r" onPress={() => recap($)} />}
+          {fit.tasks && <Button key="tasks" label="Tasks" hotkey="t" onPress={() => void $.ui.open({ id: PANE, title: 'Today' })} />}
+          {asOfShort}
         </Box>
       )
     }
@@ -619,7 +635,11 @@ export const register: Register = (on, options) => {
     const inbox = Object.keys(today.inbox).length
     return (
       <Box key="tasks" flexDirection="column">
-        <Text dimColor>{today.day} · {band(today, await $.clock.now()).progress} · inbox {inbox} · data {clockOf(today.last_ts)}</Text>
+        <Box key="pane-head" columnGap={1}>
+          <Text dimColor>{today.day} · {band(today, await $.clock.now()).progress} · inbox {inbox} · data {clockOf(today.last_ts)}</Text>
+          {today.open && <Button key="pane-break" label="Break" onPress={() => update($, breakPick, v => !v)} />}
+          <Button key="pane-recap" label="Recap" onPress={() => recap($)} />
+        </Box>
         {rows.length === 0 && <Text dimColor>No tasks today.</Text>}
         {rows.map(row => (
           <Box key={`task-${row.id}`} flexDirection="column">
