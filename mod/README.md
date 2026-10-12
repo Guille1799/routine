@@ -9,6 +9,7 @@ the contracts it relies on in [`docs/INTERFACES.md`](../docs/INTERFACES.md).
 | Where | What |
 |---|---|
 | Each session its own task (D64) | A task belongs to the session of its last start or wait. The band, the per-prompt context, the token count, the idle pause and the tool's defaults all follow **this session's** task: active (timer, Pause, Done, Wait), paused (Resume) or waiting as a side task (since when, Done). The day's active task, when it is in another session, is only named, dimmed (`now: T9 elsewhere`). A session with no task says `no task in this session · say 'let's do T#'`. A slow side task starts in its own session straight from pending with `wait` |
+| Footer chip | This session's task in a few characters at the right of the prompt footer (`SessionMode`): `T1 ▶ 14m`, `T4 waiting 09:45`, `T1 paused`, `no task here`, `no day open`. Desktop draws it in **every pane** of a split view, where the band shows only in the active pane |
 | Band above the prompt | `date · n of m done · T2 <task> · 41m · [Pause] [Done] [Break] [Recap] [Tasks] · data 09:41`. The last part is the time of the data it read (`last_ts`). A missing data folder or diary is said there, never thrown. Items sit a gap apart, and the line fits its pane: below 100 columns the date goes and the progress and time shorten (`1/3`, `09:41`); below 72 Recap and the progress go and Break shows only once it is due; below 48 Tasks goes too. The task, its timer, Pause and Done always stay. `Wait` (wide and medium only) sets this session's task waiting (D62) |
 | Tasks pane | The band's `Tasks` button opens a pane with today's full list: status mark, title, done when, first step, carried counter, and the inbox count. `Start` on pending and paused tasks, `Done` on the active one (the same writer calls and done row as the band), `Reopen` on finished ones, which asks the reason first (D57). `Edit` opens the card in place (title, done when, first step, perimeter) and saves only what changed; `Unset priority` on the day's priority (D61). Rows of this session's tasks say `· here`. A waiting task shows `[w]` and since when, with `Start` to bring it back; active and paused ones offer `Wait` (D62). Break and Recap are here too. The phone, which has no text field, gets no Reopen or Edit |
 | No day open today | Once per session per day, the model is told to ask in one line whether to start the day with `/plan-day` (and that it closes an older day still open first). The band says `no day open today · /plan-day`, or `<day> still open · /plan-day` |
@@ -38,6 +39,7 @@ pane** only, and only for your own local sessions (checked in the desktop app 2.
 Code tab mounts the band with `isPanelActive`). In a split view the band follows the
 pane you click into; the other panes show none, even though the mod runs in each of them
 (tool, context and `/inbox` work everywhere). The terminal draws it in every session.
+The footer chip is drawn per pane, so every pane still says its session's task.
 
 ## Options
 
