@@ -21,9 +21,7 @@ from routine import state
 REPO = Path(__file__).resolve().parent.parent
 CONTRACT = REPO / "mod" / "hooks" / "contract.ts"
 # The order a day would see them in; every contract entry must appear here.
-SCENARIO = ["task_edit", "task_edit_technique", "wait", "start", "drift_warn", "drift_reply", "inbox", "said", "break_start", "break_end",
-            "usage", "pause", "start", "pause_click", "pause_reason", "checkpoint", "start", "pause_idle", "start", "wait", "start", "done",
-            "reopen"]
+SCENARIO = ["task_edit", "task_edit_technique", "wait", "start", "drift_warn", "drift_reply", "inbox", "said", "break_start", "break_end", "usage", "pause", "start", "pause_click", "pause_reason", "start", "pause_chat_reason", "start", "pause_idle", "start", "wait", "start", "done", "reopen", "drop", "close_day"]
 
 
 def contract() -> dict:
@@ -83,10 +81,11 @@ def test_r16_every_call_the_mod_makes_is_written_by_the_real_writer(data):
                 "output": u["output_tokens"]}
 
     st = state.current(data)
-    assert st["tasks"][task]["status"] == "pending"  # done, then reopened with a reason (D57)
+    assert st["tasks"][task]["status"] == "dropped"  # done, reopened with a reason (D57), then dropped
     assert st["tasks"][task]["reopened"] == [calls["reopen"]["data"]["why"]]
     assert st["tasks"][task]["done"] == calls["done"]["data"]["fields"]
-    assert st["tasks"][task]["notes"][-1] == calls["done"]["data"]["note"]
+    assert st["tasks"][task]["notes"][-2:] == [calls["done"]["data"]["note"], calls["drop"]["data"]["note"]]
+    assert st["closed"] and st["tomorrow"] == calls["close_day"]["data"]["tomorrow"]
     assert st["drift"][task]["warned"] == 1
     assert st["break"] is None
     assert [i["text"] for i in st["inbox"].values()] == ["buy milk"]

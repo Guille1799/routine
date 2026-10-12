@@ -57,7 +57,7 @@ test('R15: a desktop session that attaches after start gets the tool then', { op
   w.surfaces = ['desktop']
   await $.session.attach({ clientId: 'c1', surface: 'desktop' } as never)
   expect(w.registeredTools).toEqual(['routine'])
-  expect(w.registeredCommands).toEqual(['inbox', 'pause', 'resume', 'done', 'wait', 'tasks'])
+  expect(w.registeredCommands).toEqual(['inbox', 'pause', 'resume', 'done', 'wait', 'tasks', 'drop', 'close'])
 })
 
 test('R16: "let\'s do T3" starts the stable id through the writer and hands back the card', { options: OPTIONS }, async ($, on) => {
@@ -69,14 +69,54 @@ test('R16: "let\'s do T3" starts the stable id through the writer and hands back
   expect(writes(w)[0]).toContain(CWD)
 })
 
-test('R16: pause needs a note and reaches the writer with it', { options: OPTIONS }, async ($, on) => {
+test('R16/D72: pause from chat writes no note, like the button; a reason only if one was said', { options: OPTIONS }, async ($, on) => {
   const w = world(on)
   await $.session.start(START)
-  const refused = await $.tool.call({ tool: TOOL, action: 'pause' } as never)
-  expect(refusal(refused)).toContain('a pause needs a note')
-  expect(writes(w)).toEqual([])
-  await $.tool.call({ tool: TOOL, action: 'pause', note: C.pause!.data!.note } as never)
-  expect(writes(w)).toEqual([argvOf(C.pause!, ACTIVE)])
+  await $.tool.call({ tool: TOOL, action: 'pause' } as never)
+  expect(writes(w)).toEqual([argvOf(C.pause_click!, ACTIVE)])
+  await $.tool.call({ tool: TOOL, action: 'pause', reason: 'interrupted' } as never)
+  expect(writes(w).at(-1)).toEqual(argvOf(C.pause_chat_reason!, ACTIVE))
+  const odd = await $.tool.call({ tool: TOOL, action: 'pause', reason: 'bored' } as never)
+  expect(refusal(odd)).toContain('a pause reason is one of')
+  expect(writes(w)).toHaveLength(2)
+})
+
+test('D72: the per-prompt context no longer asks for a note on pause', { options: OPTIONS }, async ($, on) => {
+  world(on)
+  await $.session.start(START)
+  const context = ((await $.prompt.submit(prompt('ok'))).context ?? []).join('\n')
+  expect(context).toContain('"pause" → mcp__routine__routine action "pause": no note')
+  expect(context).not.toContain('"pause" with a note')
+})
+
+test('drop: from chat, the task of this session or the one named, with the reason as its note', { options: OPTIONS }, async ($, on) => {
+  const w = world(on)
+  await $.session.start(START)
+  await $.tool.call({ tool: TOOL, action: 'drop', why: 'not needed after all' } as never)
+  await $.tool.call({ tool: TOOL, action: 'drop', task: 'T3' } as never)
+  expect(writes(w)).toEqual([argvOf(C.drop!, ACTIVE), argvOf({ ...C.drop!, data: {} }, THIRD)])
+})
+
+test('close: from chat, with the thing for tomorrow; the answer says whether the day was committed', { options: OPTIONS }, async ($, on) => {
+  const w = world(on, { writerGit: { committed: true } })
+  await $.session.start(START)
+  const r = await $.tool.call({ tool: TOOL, action: 'close', tomorrow: 'finish the parser' } as never)
+  expect(writes(w)).toEqual([argvOf(C.close_day!)])
+  expect(String((r as { result?: unknown }).result)).toBe('Day closed. The day is committed. Unfinished tasks and inbox items carry to tomorrow; /plan-day sorts them.')
+})
+
+test('/drop and /close act from the prompt of the pane, without a model turn', { options: OPTIONS }, async ($, on) => {
+  const w = world(on)
+  await $.session.start(START)
+  expect((await $.command.run({ command: 'drop', args: 'T3 the parser is gone' } as never)).text).toBe('Dropped T3.')
+  expect((await $.command.run({ command: 'drop', args: 'not needed after all' } as never)).text).toBe('Dropped T2.')
+  expect((await $.command.run({ command: 'close', args: 'finish the parser' } as never)).text).toBe('Day closed. Unfinished tasks and inbox items carry to tomorrow; /plan-day sorts them.')
+  expect(writes(w)).toEqual([
+    argvOf({ ...C.drop!, data: { note: 'the parser is gone' } }, THIRD),
+    argvOf(C.drop!, ACTIVE),
+    argvOf(C.close_day!),
+  ])
+  expect(w.forks).toEqual([])
 })
 
 test('R16: an unknown task is asked back, never guessed', { options: OPTIONS }, async ($, on) => {

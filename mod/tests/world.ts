@@ -84,6 +84,8 @@ export type World = {
   fork: string | 'nothing-to-fork'
   /** Exit code the writer answers next (0 written, 1 refused). */
   writerExit: number
+  /** What the writer says about the day commit after close-day (D69), when it says anything. */
+  writerGit?: unknown
   // what happened
   runs: string[][]
   registeredTools: string[]
@@ -173,7 +175,7 @@ export function world(on: On, over: Partial<World> = {}): World {
       return answer(w.fields.exit, JSON.stringify({ ok: false, error: w.fields.error }))
     }
     if (w.writerExit !== 0) return answer(w.writerExit, JSON.stringify({ ok: false, error: 'refused by the writer' }))
-    return answer(0, JSON.stringify({ ok: true, events: [] }))
+    return answer(0, JSON.stringify(argv[3] === 'close-day' && w.writerGit !== undefined ? { ok: true, events: [], git: w.writerGit } : { ok: true, events: [] }))
   })
   on('tool.register', ($, e) => {
     w.registeredTools.push(e.name)

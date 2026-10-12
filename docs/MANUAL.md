@@ -133,8 +133,9 @@ code 2 means the data folder was not found.
    python -m routine close-day --data '{"tomorrow": "finish the parser"}'
    ```
 
-   There is no close button or close skill yet: you run these yourself, or ask a session to.
-   If you do not close, the next morning `/plan-day` closes the day for you. Closing pauses
+   Or just type `/close <tomorrow's thing>` (or say "close the day"): it closes the day, and
+   what you did not sort carries to tomorrow, where `/plan-day` sorts it. If you do not close,
+   the next morning `/plan-day` closes the day for you. Closing pauses
    the active task, ends a running break and, when the data folder is a git repository,
    commits the day. Unfinished tasks and inbox items move to the next day when it opens, with
    the same id and a counter of how many days they carried. Skipping the close loses nothing.
@@ -339,16 +340,18 @@ you just say what you want. A task with no name means this session's task.
 | Action | Say something like | What happens |
 |---|---|---|
 | `start` | "let's do T2" | starts T2 here and gives the model its card and last note. You must name the task |
-| `pause` | "pause" | pauses, with a note the model drafts (what was done, where it stopped, next step) |
+| `pause` | "pause", "pause, I was interrupted" | pauses at once and writes no note, like the button (D72); a reason only if you said one |
 | `wait` | "T2 can run on its own" | the task waits: this session works on it alone |
 | `done` | "done" | finishes the task; the model drafts the note and asks only for missing required fields |
+| `drop` | "drop T4, not needed after all" | gives the task up (this session's, or the one named); your reason becomes its note |
 | `reopen` | "reopen T1, I need one more check" | reopens it; the model asks why if you did not say |
-| `edit` | "change the first step of T3 to ..." | edits the card (`title`, `done_when`, `first_step`, `perimeter`, `kind`, `project`, `priority`) |
+| `edit` | "change the first step of T3 to ...", "use 50/10 for T3" | edits the card (`title`, `done_when`, `first_step`, `perimeter`, `kind`, `project`, `priority`, `technique`) |
 | `drift_warn` | (the model, when a message leaves the perimeter) | logs one warning and asks: back to the task, or continue and why? |
 | `drift_reply` | "back" / "continue, because ..." | logs your answer |
 | `inbox` | "put 'call the bank' in the inbox" | captures it |
 | `said` | (the model, to keep a reaction, answer, thought or statement of yours) | keeps it for reuse |
 | `status` | "what are today's tasks?" | lists today's tasks with their marks |
+| `close` | "close the day; tomorrow I finish the parser" | closes the day with tomorrow's thing; the day is committed when the data folder is a git repository. Unsorted inbox items and unfinished tasks carry to tomorrow, where `/plan-day` sorts them |
 
 The tool and the context work only in interactive sessions. In `claude -p` runs and robots
 the mod does nothing and writes nothing.
@@ -365,6 +368,8 @@ They act on **this session's** task and answer in one line, without a model turn
 | `/done` | opens the done row above the prompt |
 | `/wait [T#]` | this session's task waits; with `T#`, that task starts here as a side task |
 | `/tasks` | opens the Tasks pane |
+| `/drop [T#] [reason]` | gives up this session's task, or the one named (`/drop T4 not needed`); the reason becomes its note |
+| `/close [tomorrow's thing]` | closes the day (`/close finish the parser`); answers whether the day was committed |
 | `/plan-day` | the morning skill (not part of the mod) |
 
 `/recap` is Claude Code's own command; you can type it, but the band's `Recap` button uses its

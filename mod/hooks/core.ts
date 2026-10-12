@@ -57,7 +57,7 @@ export type FieldValue = string | boolean
 
 // The writer CLI's actions this mod uses. The CLI spells them with dashes.
 export type WriterAction =
-  | 'start' | 'pause' | 'pause_reason' | 'checkpoint' | 'wait' | 'done' | 'reopen' | 'task_edit' | 'drift_warn' | 'drift_reply'
+  | 'start' | 'pause' | 'pause_reason' | 'wait' | 'done' | 'drop' | 'reopen' | 'task_edit' | 'close_day' | 'drift_warn' | 'drift_reply'
   | 'inbox' | 'said' | 'break_start' | 'break_end' | 'usage'
 
 export type WriterCall = {
@@ -79,18 +79,18 @@ export function writerArgv(python: string, call: WriterCall): string[] {
 }
 
 export type WriterOutcome =
-  | { ok: true; events: unknown[] }
+  | { ok: true; events: unknown[]; git?: unknown }
   | { ok: false; reason: 'refused' | 'no-data' | 'failed'; error: string }
 
 /** Reads the CLI's answer by its exit code: 0 written, 1 refused, 2 no data folder. */
 export function readWriterAnswer(exitCode: number, stdout: string, stderr: string): WriterOutcome {
-  let body: { ok?: boolean; error?: string; events?: unknown[] } = {}
+  let body: { ok?: boolean; error?: string; events?: unknown[]; git?: unknown } = {}
   try {
     body = JSON.parse(stdout)
   } catch {
     body = {}
   }
-  if (exitCode === 0) return { ok: true, events: body.events ?? [] }
+  if (exitCode === 0) return body.git === undefined ? { ok: true, events: body.events ?? [] } : { ok: true, events: body.events ?? [], git: body.git }
   const error = body.error ?? (stderr.trim().split('\n').pop() || `exit code ${exitCode}`)
   if (exitCode === 1) return { ok: false, reason: 'refused', error }
   if (exitCode === 2) return { ok: false, reason: 'no-data', error }
@@ -396,7 +396,7 @@ export function promptContext(today: Today, tool: string, session = ''): string 
   lines.push(
     `When the user says the task is done, call ${tool} with action "done": draft the note yourself ` +
       '(done / stopped at / next / I take away), ask only for the fields the tool says are missing.',
-    `"pause" → ${tool} action "pause" with a note: what was done, where it stopped, next step.`,
+    `"pause" → ${tool} action "pause": no note (D72); a reason only if the user gave one (${PAUSE_REASONS.join(', ')}).`,
   )
   return lines.join('\n')
 }
