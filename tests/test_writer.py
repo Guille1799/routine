@@ -276,3 +276,33 @@ def test_r34_leaving_saves_the_context_as_its_own_step(root):
     st = state.current(root)
     assert st["tasks"][a]["notes"] == ["did A, stopped at B, next C"]
     assert st["tasks"][a]["status"] == "paused"
+
+
+def test_d57_finished_tasks_are_final_until_reopened(root):
+    writer.record(root, "open_day", {"mode": "normal"}, day="2026-10-12")
+    done_t, dropped_t = add(root), add(root, title="other")
+    writer.record(root, "start", task=done_t)
+    writer.record(root, "done", {"fields": {}}, task=done_t)
+    writer.record(root, "drop", task=dropped_t)
+    for t in (done_t, dropped_t):
+        for etype, data in (("start", {}), ("done", {"fields": {}}), ("drop", {})):
+            with pytest.raises(writer.RuleError):
+                writer.record(root, etype, data, task=t)
+    with pytest.raises(events.EventError):          # reopening needs a reason
+        writer.record(root, "reopen", {}, task=done_t)
+    writer.record(root, "reopen", {"why": "pressed done by mistake"}, task=done_t)
+    st = state.current(root)
+    assert st["tasks"][done_t]["status"] == "pending"
+    assert st["tasks"][done_t]["reopened"] == ["pressed done by mistake"]
+    with pytest.raises(writer.RuleError):           # only finished tasks reopen
+        writer.record(root, "reopen", {"why": "x"}, task=done_t)
+
+
+def test_d57_done_without_start_is_accepted_and_marked(root):
+    writer.record(root, "open_day", {"mode": "normal"}, day="2026-10-12")
+    t = add(root)
+    ev_done = writer.record(root, "done", {"fields": {}}, task=t)[-1]
+    assert ev_done["data"]["unstarted"] is True
+    t2 = add(root, title="started")
+    writer.record(root, "start", task=t2)
+    assert "unstarted" not in writer.record(root, "done", {"fields": {}}, task=t2)[-1]["data"]

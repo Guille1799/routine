@@ -21,6 +21,9 @@ from . import paths, state
 LOCK_TIMEOUT_S = 10.0
 
 
+FINAL = ("done", "dropped")
+
+
 class RuleError(ValueError):
     """The event is well formed but breaks a rule of the routine. Nothing is written."""
 
@@ -151,9 +154,16 @@ def record(root: Path, etype: str, data: dict | None = None, task: str | None = 
                 if task in st["tasks"]:
                     raise RuleError(f"task {task} already exists today")
             elif etype in ("start", "pause", "pause_reason", "checkpoint", "done", "drop",
-                           "drift_warn", "drift_reply"):
+                           "reopen", "drift_warn", "drift_reply"):
                 if task not in st["tasks"]:
                     raise RuleError(f"unknown task for today: {task}")
+            status = st["tasks"][task]["status"] if task in st["tasks"] else None
+            if etype in ("start", "done", "drop") and status in FINAL:  # finished is final (D57)
+                raise RuleError(f"{task} is {status}: finished tasks are final; reopen it first")
+            if etype == "reopen" and status not in FINAL:
+                raise RuleError(f"only a done or dropped task can be reopened: {task} is {status}")
+            if etype == "done" and status == "pending":  # done outside the routine (D57)
+                data["unstarted"] = True
             if etype == "start":
                 card = st["tasks"][task]
                 missing = [f for f in ev.TASK_FIELDS_REQUIRED_TO_START if not card.get(f)]

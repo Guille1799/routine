@@ -51,6 +51,9 @@ def fold(events: list[dict]) -> dict:
             st["active"] = tid
             if st["last_paused"] == tid:
                 st["last_paused"] = None
+        elif t == "reopen":
+            st["tasks"][tid]["status"] = "pending"
+            st["tasks"][tid].setdefault("reopened", []).append(d["why"])
         elif t in ("pause", "done", "drop"):
             task = st["tasks"][tid]
             task["status"] = {"pause": "paused", "done": "done", "drop": "dropped"}[t]
