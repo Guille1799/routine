@@ -57,7 +57,7 @@ test('R15: a desktop session that attaches after start gets the tool then', { op
   w.surfaces = ['desktop']
   await $.session.attach({ clientId: 'c1', surface: 'desktop' } as never)
   expect(w.registeredTools).toEqual(['routine'])
-  expect(w.registeredCommands).toEqual(['inbox'])
+  expect(w.registeredCommands).toEqual(['inbox', 'pause', 'resume', 'done', 'wait', 'tasks'])
 })
 
 test('R16: "let\'s do T3" starts the stable id through the writer and hands back the card', { options: OPTIONS }, async ($, on) => {

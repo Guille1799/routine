@@ -244,6 +244,61 @@ async function waitTask($: $, task: string): Promise<void> {
   if (!out.ok) $.ui.toast(`Wait: ${out.error}`)
 }
 
+const SESSION_COMMANDS = [
+  { name: 'pause', description: "Pause this session's task (a reason may follow: /pause interrupted)", argumentHint: '[reason]' },
+  { name: 'resume', description: "Resume this session's paused or waiting task" },
+  { name: 'done', description: "Finish this session's task: opens the done row above the prompt" },
+  { name: 'wait', description: "Let this session's task (or the one named) run here on its own", argumentHint: '[T#]' },
+  { name: 'tasks', description: "Open today's task list" },
+] as const
+
+/**
+ * The session commands (D64): each acts on THIS session's task and answers in one line, with
+ * no model turn. /recap is the engine's own, which the person may run; a plugin may not.
+ */
+async function sessionCommand($: $, name: string, args: string): Promise<string> {
+  if (name === 'tasks') {
+    await $.ui.open({ id: PANE, title: 'Today' })
+    return "Today's tasks are open."
+  }
+  const r = await readToday($)
+  if (!r.today) return `routine: ${r.problem}`
+  const today = r.today
+  const own = ownTask(today, await $.session.id())
+  const card = own ? today.tasks[own] : undefined
+  const alias = own ? aliasOf(today, own) : ''
+  if (name === 'wait' && args) {
+    const named = resolveTask(today, args)
+    if (!named) return `No task ${args} today.`
+    const out = await write($, { action: 'wait', task: named })
+    return out.ok ? `${aliasOf(today, named)} runs here on its own (waiting).` : `Wait: ${out.error}`
+  }
+  if (!own || !card) return "No task in this session. Say \"let's do T#\", or /wait T# for a side task."
+  if (name === 'pause') {
+    if (card.status !== 'active') return `${alias} is ${card.status}: nothing to pause.`
+    const reason = args.trim().toLowerCase()
+    if (reason && !(PAUSE_REASONS as readonly string[]).includes(reason)) return `Unknown reason "${args}". One of: ${PAUSE_REASONS.join(', ')}.`
+    await pauseNow($, own)
+    if (!reason) return `Paused ${alias}. Why? Pick it on the band, or /pause <reason> next time.`
+    await setReason($, own, reason)
+    return `Paused ${alias}: ${reason}.`
+  }
+  if (name === 'resume') {
+    if (card.status === 'active') return `${alias} is already running.`
+    await startTask($, own)
+    return `Resumed ${alias}.`
+  }
+  if (name === 'done') {
+    await openForm($, own)
+    return `Done row for ${alias} is open above the prompt.`
+  }
+  if (name === 'wait') {
+    const out = await write($, { action: 'wait', task: own })
+    return out.ok ? `${alias} runs here on its own (waiting).` : `Wait: ${out.error}`
+  }
+  return `Unknown command /${name}.`
+}
+
 async function startBreak($: $, n: number): Promise<void> {
   const choice = BREAKS[n] ?? BREAKS[0]!
   await update($, breakPick, () => false)
@@ -353,6 +408,8 @@ async function setup($: $): Promise<void> {
     argumentHint: '<text>',
     immediate: true,
   })
+  // This session's task from its own prompt (D64): a split view shows the band in one pane only.
+  for (const command of SESSION_COMMANDS) await $.command.register({ ...command, immediate: true })
   $.clock.every(TICK_MS, () => void tick($))
   await refreshSnapshot($)
   await idleCheck($) // after a load, idleness counts from the diary's last event
@@ -469,6 +526,12 @@ export const register: Register = (on, options) => {
   })
 
   on('command.run', { command: 'inbox' }, async ($, e) => ({ text: await capture($, e.args.trim()) }))
+
+  on('command.run', { command: 'pause' }, async ($, e) => ({ text: await sessionCommand($, 'pause', e.args.trim()) }))
+  on('command.run', { command: 'resume' }, async ($, e) => ({ text: await sessionCommand($, 'resume', e.args.trim()) }))
+  on('command.run', { command: 'done' }, async ($, e) => ({ text: await sessionCommand($, 'done', e.args.trim()) }))
+  on('command.run', { command: 'wait' }, async ($, e) => ({ text: await sessionCommand($, 'wait', e.args.trim()) }))
+  on('command.run', { command: 'tasks' }, async ($, e) => ({ text: await sessionCommand($, 'tasks', e.args.trim()) }))
 
   on('prompt.submit', async ($, e, next) => {
     if (!(await isInteractive($))) return next(e)
@@ -723,8 +786,25 @@ export const register: Register = (on, options) => {
   // split view, where it draws the band only in the active one. Added to the engine's modes.
   on('ui.render', { component: 'SessionMode' }, async ($, e, next) => {
     const r = await readToday($)
-    const chip = sessionChip(r.today, await $.session.id(), await $.clock.now())
-    return chip ? next({ ...e, props: { ...e.props, modes: [...e.props.modes, chip] } }) : next(e)
+    const session = await $.session.id()
+    const chip = sessionChip(r.today, session, await $.clock.now())
+    if (!chip) return next(e)
+    if (e.surface !== 'desktop') return next({ ...e, props: { ...e.props, modes: [...e.props.modes, chip] } })
+    // Desktop keeps a Button in the chip and makes it clickable in every pane (it cannot take
+    // the keyboard: only Pane and AbovePrompt hold focus), so the chip acts on THIS session.
+    const { Box, Text, Button } = $.ui.resolve(e)
+    const own = r.today ? ownTask(r.today, session) : undefined
+    const status = own ? r.today?.tasks[own]?.status : undefined
+    return (
+      <Box key="chip">
+        <Text>{[...e.props.modes, chip].join(' & ')}</Text>
+        {own && status === 'active' && <Button key="chip-pause" label="pause" onPress={() => pauseNow($, own)} />}
+        {own && status === 'paused' && (
+          <Button key="chip-resume" label="resume" onPress={() => startTask($, own)} />
+        )}
+        {own && <Button key="chip-recap" label="recap" onPress={() => recap($)} />}
+      </Box>
+    )
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
