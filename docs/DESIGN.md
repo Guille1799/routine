@@ -124,6 +124,9 @@ too (D30). The sheet shows one count per channel and expands only what is new (D
 - **The close commits the day** (D69): when the data folder is a git repository, closing
   the day commits `diary/` and `state/` there, never `config/`, and says so; when it is not
   one, the close says it skipped the commit.
+- **The manual is checked against the code** (D71): `docs/MANUAL.md` must have a row for
+  every CLI action, tool action, slash command, done field kind and setting, read from the
+  code by `tests/test_manual.py`, so the manual cannot fall behind silently.
 
 ## 9 · Success criterion
 
@@ -210,3 +213,4 @@ not decided (D48).
 | D67 | current | the work/break rhythm is visible: the band names the technique and shows the phase (work 18/25 · break 3/5); default pomodoro 25/5, alternatives 50/10 and free (flowtime); the technique is chosen per task and stored on its card |
 | D68 | current | refines D67: the technique is chosen per task; with none chosen there is no work timer and breaks are taken whenever the user wants; break lengths offered: 5, 10, 15 or 20 minutes |
 | D69 | current | the close commits diary/ and state/ when the data folder is a git repository, never config, and says so; otherwise it says it skipped |
+| D71 | current | the manual (docs/MANUAL.md) is checked against the code by a test: every action, tool action, command, done field kind and setting read from the code must have its row |

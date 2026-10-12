@@ -57,6 +57,7 @@ piece that owns it is being built.
 | R45 | Surrounding conditions: break with no task, start ends a break, close pauses and ends breaks, one priority | D66 | tests/test_writer.py::test_r45_surrounding_conditions |
 | R46 | The band names the technique and shows work and break phases with their minutes | D67, D68 | tests/test_mod.py::test_r46_the_band_shows_the_work_and_break_rhythm |
 | R47 | Closing the day commits diary/ and state/ in the data folder's git repository, never config; without one it says it skipped | D69 | tests/test_close.py::test_d69_the_close_commits_diary_and_state_only |
+| R48 | The manual covers every CLI action, tool action, slash command, done field kind and setting; a test fails if one is missing | D71 | tests/test_manual.py::test_r48_every_cli_action_is_in_the_manual |
 
 ## Decisions without a requirement
 

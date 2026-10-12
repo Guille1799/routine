@@ -12,6 +12,8 @@ A daily routine manager for people who work all day with Claude Code.
 
 Your data stays on your machine, in a folder outside this repository.
 
+How to install and use it, step by step: [`docs/MANUAL.md`](docs/MANUAL.md).
+
 > Status: early. Foundations (the single writer) are in place; the morning skill and the
 > Claude Code mod are being built. See [`docs/DESIGN.md`](docs/DESIGN.md).
 
