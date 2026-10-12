@@ -44,12 +44,14 @@ previous one is closed (D24).
   click, before anything is asked. Only the active task can be paused. Then the user picks
   **why** from buttons only, no free text, so the reasons can be counted later: planned,
   interrupted, blocked, switched, low energy, lost focus, other. Until a pick the pause has
-  **no reason**; each pick is written at once and replaces the one before, while the pause
-  lasts. Resume closes the pause as it is, so a pause never given a reason stays without
-  one. Starting another task pauses the active one with the reason "switched". "Other" is
+  **no reason**. A pick is written at once and closes the row, back to the band line where
+  Resume is. Resume closes the pause as it is, so a pause never given a reason stays
+  without one. Starting another task pauses the active one with the reason "switched". "Other" is
   the check on the list: if it gets more than one pause in ten, the list is wrong. The
-  reason is focus data (D44). A separate **Leave · save context** step writes the checkpoint
-  note above, drafted by the session, for resuming the task in another session. The
+  reason is focus data (D44). **A pause is only a pause**: it writes no context, because the
+  session stays open however long the user is away (G, 2026-10-12). Saving the context to
+  resume in another session belongs to leaving the session, not to pausing: where it goes
+  (Done or its own button) is open. The
   reasons live in the band, not in the engine's question dialog: that dialog takes 2-4
   options and always adds free text. Open: whether seven buttons fit the band or it drops
   to four (D55), and the prompt while paused (a mod cannot grey the prompt box out; it can
@@ -191,7 +193,7 @@ not decided (D48).
 | D53 | process | build go-ahead |
 | D54 | current | drift is warned once per episode: no new warning while one is open or after the user justified staying; after "back", a new drift can be warned |
 | D55 | principle | user experience comes first: quick, clear and friendly beats complete; every visible change is judged against it |
-| D56 | current, partly open | pause stops at the click; the reason is picked from buttons only, starts as none and can change while the pause lasts; a separate "Leave · save context" writes the drafted checkpoint note |
+| D56 | current, partly open | pause stops at the click; the reason is picked from buttons only, starts as none, and the pick closes the row; a pause writes no context (where leaving saves it is open) |
 | D57 | current | finished (done or dropped) is final: start, done and drop are refused; only reopen, with a reason, brings a task back. Done without start is accepted and marked unstarted |
 | D58 | current | the first prompt of the day asks whether to start the day with /plan-day, once per session per day |
 | D59 | current | automatic pause after N idle minutes counted from the end of the session's last answer; configurable; reason idle |
