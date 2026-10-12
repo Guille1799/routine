@@ -205,3 +205,4 @@ not decided (D48).
 | D65 | current | pausing, waiting, finishing or dropping a task with an open drift warning closes the warning as unanswered, logged as data |
 | D66 | current | surrounding rules: a break can start with zero, one or more tasks running; starting a task ends a break; closing the day pauses the active task and ends a break; one priority a day, a new one replaces the old |
 | D67 | current | the work/break rhythm is visible: the band names the technique and shows the phase (work 18/25 · break 3/5); default pomodoro 25/5, alternatives 50/10 and free (flowtime); the technique is chosen per task and stored on its card |
+| D68 | current | refines D67: the technique is chosen per task; with none chosen there is no work timer and breaks are taken whenever the user wants; break lengths offered: 5, 10, 15 or 20 minutes |

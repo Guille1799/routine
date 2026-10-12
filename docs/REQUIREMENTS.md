@@ -55,7 +55,7 @@ piece that owns it is being built.
 | R43 | Ending or pausing a task with an open drift warning closes it as unanswered | D65 | tests/test_writer.py::test_r43_ending_a_task_with_an_open_drift_warning_closes_it_as_unanswered |
 | R44 | Every cell of the state table (6 states x 6 buttons) behaves as specified | D57, D62, D10 | tests/test_writer.py::test_r44_every_cell_of_the_state_table |
 | R45 | Surrounding conditions: break with no task, start ends a break, close pauses and ends breaks, one priority | D66 | tests/test_writer.py::test_r45_surrounding_conditions |
-| R46 | The band names the technique and shows work and break phases with their minutes | D67 | pending: P3 |
+| R46 | The band names the technique and shows work and break phases with their minutes | D67, D68 | pending: P3 |
 
 ## Decisions without a requirement
 
