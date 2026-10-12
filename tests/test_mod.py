@@ -104,3 +104,7 @@ def test_r36_ask_to_start_the_day_once_per_session_per_day():
 
 def test_r38_idle_pause_after_configured_minutes():
     proven("R38")
+
+
+def test_r46_the_band_shows_the_work_and_break_rhythm():
+    proven("R46")

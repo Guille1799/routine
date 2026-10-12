@@ -94,24 +94,24 @@ test('R17: a data folder with no diary yet says so', { options: OPTIONS }, async
   expect(await text(ui)).toContain('no diary yet')
 })
 
-test('R25: a break starts as a pomodoro by default, through the writer', { options: OPTIONS }, async ($, on) => {
+test('R25: Break offers 5, 10, 15 or 20 minutes (D68) and logs the task\'s rhythm', { options: OPTIONS }, async ($, on) => {
   const w = world(on)
   await $.session.start(START)
   const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
   await ui.press({ key: 'break' })
-  expect(await text(ui)).toContain('[5 min] [15 min] [17 min]')
-  await ui.press({ key: 'break-0' })
-  expect(writes(w)).toEqual([argvOf(C.break_start!)])
+  expect(await text(ui)).toContain('Break: [5 min] [10 min] [15 min] [20 min]')
+  await ui.press({ key: 'break-1' })
+  expect(writes(w)).toEqual([argvOf({ ...C.break_start!, data: { technique: 'none', minutes: 10 } })])
 })
 
-test('R25: after 25 minutes of work the band offers the break', { options: OPTIONS }, async ($, on) => {
-  const w = world(on)
+test('R25: with no rhythm chosen there is no work timer: the band never says a break is due (D68)', { options: OPTIONS }, async ($, on) => {
+  world(on)
   await $.session.start(START)
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
-  expect(await text(ui)).toContain('[Break (25m up)]')
-  w.today = today({ tasks: { ...today().tasks, 't-20261012-bbbbbb': { ...today().tasks['t-20261012-bbbbbb']!, since: '2026-10-12T09:30:00+02:00' } } })
-  await ui.redraw()
-  expect(await text(ui)).not.toContain('25m up')
+  const line = await text(ui)
+  expect(line).toContain('T2 Read section 3 41m')
+  expect(line).not.toContain('break due')
+  expect(line).not.toContain('time for')
 })
 
 test('R25: the time left comes from the break_start event, so a reloaded module shows the same', { options: OPTIONS }, async ($, on) => {
@@ -119,7 +119,7 @@ test('R25: the time left comes from the break_start event, so a reloaded module 
   world(on, { today: today({ break: { technique: 'pomodoro', minutes: 5, since: '2026-10-12T09:38:00+02:00' } }) })
   await $.session.start(START)
   const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
-  expect(await text(ui)).toContain('break: 2m left')
+  expect(await text(ui)).toContain('break 2/5 left')
 })
 
 test('R25: at the end of the break, one tap answers the phone question, then a recap', { options: OPTIONS }, async ($, on) => {

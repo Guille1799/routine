@@ -65,9 +65,11 @@ test('R17: narrow, task, timer, Pause, Done and Tasks stay; Break only once it i
     const line = await text(ui)
     for (const part of ['T2 Read section 3', '11m', '[Pause]', '[Done]', '[Tasks]', '09:41']) expect(line).toContain(part)
     for (const gone of ['1/3', '[Recap]', '[Break]']) expect(line).not.toContain(gone)
-    w.today = today() // 41 minutes in: due
+    const due = today() // 41 minutes into a pomodoro: its break is due
+    due.tasks['t-20261012-bbbbbb'] = { ...due.tasks['t-20261012-bbbbbb']!, technique: 'pomodoro 25/5' }
+    w.today = due
     await ui.redraw()
-    expect((await ui.find({ key: 'break' }))?.props.variant).toBe('primary')
+    expect((await ui.find({ key: 'start-break' }))?.props.variant).toBe('primary')
     w.today = early()
     await ui.unmount()
   }

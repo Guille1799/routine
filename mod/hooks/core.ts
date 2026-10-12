@@ -20,6 +20,8 @@ export type Card = {
   waiting_since?: string
   /** The session of its last start or wait (D64): that session's band and context show it. */
   session?: string
+  /** The work/break rhythm chosen for the task (D67, D68): "pomodoro 25/5", "50/10", "free" or "none". */
+  technique?: string
   /** Every pause, at the click; reason null until the user picks one (D56). */
   pauses?: { at: string; reason: string | null }[]
 }
@@ -36,6 +38,8 @@ export type Today = {
   last_paused?: string | null
   inbox: Record<string, { text: string; since: string }>
   break: { technique: string; minutes?: number | null; since: string } | null
+  /** When the last break ended: a work phase starts again there (D67). */
+  last_break_end?: string | null
   drift: Record<string, { warned: number; replies: { action: string; why?: string }[]; open?: boolean }>
   last_ts: string | null
 }
@@ -128,16 +132,71 @@ export function clockOf(iso: string | null): string {
   return m ? m[1]! : iso
 }
 
-export const POMODORO_WORK_MIN = 25
+/** The rhythms a task can follow (D67): pomodoro first, the suggested one (D50); "none" keeps no timer (D68). */
+export const TECHNIQUES = ['pomodoro 25/5', '50/10', 'free', 'none'] as const
 
-export type BreakChoice = { technique: string; minutes: number; label: string }
+/** The break lengths offered (D68). */
+export const BREAK_MINUTES = [5, 10, 15, 20] as const
 
-/** Pomodoro first: it is the default (D50). The others are offered, never recommended. */
-export const BREAKS: readonly BreakChoice[] = [
-  { technique: 'pomodoro', minutes: 5, label: '5 min' },
-  { technique: 'pomodoro-long', minutes: 15, label: '15 min' },
-  { technique: '52-17', minutes: 17, label: '17 min' },
-]
+export type Technique = { technique: string; name: string; kind: 'timed' | 'free' | 'none'; work: number; rest: number }
+
+/** "pomodoro 25/5" → Pomodoro, 25 work, 5 break; "50/10"; "free" → flowtime; none or unknown → no timer (D68). */
+export function parseTechnique(technique: string | undefined): Technique {
+  const t = (technique ?? '').trim()
+  if (t.toLowerCase() === 'free') return { technique: t, name: 'free', kind: 'free', work: 0, rest: 0 }
+  const m = /(\d+)\s*\/\s*(\d+)/.exec(t)
+  if (!m) return { technique: t || 'none', name: 'none', kind: 'none', work: 0, rest: 0 }
+  const [work, rest] = [Number(m[1]), Number(m[2])]
+  return { technique: t, name: /pomodoro/i.test(t) ? 'Pomodoro' : `${work}/${rest}`, kind: 'timed', work, rest }
+}
+
+/** A free (flowtime) phase earns about a fifth of its work, as the nearest offered length. */
+export function freeBreakMinutes(workMinutes: number): number {
+  const want = workMinutes / 5
+  return [...BREAK_MINUTES].sort((a, b) => Math.abs(a - want) - Math.abs(b - want) || a - b)[0]!
+}
+
+/**
+ * Where the active task is in its rhythm (D67): the work phase starts at the later of the
+ * task's start and the last break's end, so a reload or another session reads the same.
+ */
+export type Rhythm = {
+  technique: string
+  name: string
+  kind: Technique['kind']
+  /** Minutes worked in this phase. */
+  work: number
+  /** The phase's length; 0 when untimed. */
+  total: number
+  /** The break this phase suggests, in minutes; 0 with no technique. */
+  rest: number
+  /** A timed work phase is over: time for its break. */
+  due: boolean
+  phaseStart: number
+  /** The card has no technique yet: the band offers the choice (D67), no timer meanwhile (D68). */
+  unchosen: boolean
+}
+
+export function rhythm(today: Today, id: string, nowMs: number): Rhythm | undefined {
+  const card = today.tasks[id]
+  if (!card || card.status !== 'active' || !card.since) return undefined
+  const t = parseTechnique(card.technique)
+  const since = Date.parse(card.since)
+  const lastEnd = today.last_break_end ? Date.parse(today.last_break_end) : NaN
+  const phaseStart = Number.isFinite(lastEnd) && lastEnd > since ? lastEnd : since
+  const work = Math.max(0, Math.floor((nowMs - phaseStart) / 60000))
+  return {
+    technique: t.technique,
+    name: t.name,
+    kind: t.kind,
+    work,
+    total: t.work,
+    rest: t.kind === 'timed' ? t.rest : t.kind === 'free' ? freeBreakMinutes(work) : 0,
+    due: t.kind === 'timed' && work >= t.work,
+    phaseStart,
+    unchosen: !card.technique,
+  }
+}
 
 /**
  * Milliseconds left in the break, computed from the `break_start` event the
@@ -174,14 +233,14 @@ export type Band = {
   date: string
   progress: string
   /** This session's task, active: with its timer and Pause / Done / Wait. */
-  task?: { id: string; alias: string; title: string; elapsed?: string; breakDue: boolean }
+  task?: { id: string; alias: string; title: string; elapsed?: string; rhythm?: Rhythm }
   /** This session's task, paused: the band offers Resume. */
   resume?: { id: string; alias: string; title: string; reason: string | null }
   /** This session's task, waiting (D62): a side task this session works on alone. */
   waiting?: { id: string; alias: string; title: string; since: string }
   /** The day's active task when it belongs to another session, shown dimmed (D64). */
   elsewhere?: { alias: string; title: string }
-  break?: { leftMin: number; isOver: boolean }
+  break?: { leftMin: number; minutes: number; isOver: boolean }
   asOf: string
 }
 
@@ -196,7 +255,7 @@ export function band(today: Today, nowMs: number, session = ''): Band {
   }
   const left = breakLeftMs(today.break, nowMs)
   if (left !== undefined) {
-    out.break = { leftMin: Math.max(0, Math.ceil(left / 60000)), isOver: left <= 0 }
+    out.break = { leftMin: Math.max(0, Math.ceil(left / 60000)), minutes: today.break?.minutes ?? 5, isOver: left <= 0 }
   }
   const own = ownTask(today, session)
   const card = own ? today.tasks[own] : undefined
@@ -207,7 +266,7 @@ export function band(today: Today, nowMs: number, session = ''): Band {
       alias: aliasOf(today, own),
       title: card.title ?? own,
       elapsed: min === undefined ? undefined : formatMinutes(min),
-      breakDue: min !== undefined && min >= POMODORO_WORK_MIN,
+      rhythm: rhythm(today, own, nowMs),
     }
   } else if (own && card?.status === 'waiting') {
     out.waiting = { id: own, alias: aliasOf(today, own), title: card.title ?? own, since: clockOf(card.waiting_since ?? null) }
@@ -500,7 +559,16 @@ export function sessionChip(today: Today | undefined, session: string, nowMs: nu
   if (!id || !card) return 'no task here'
   const alias = aliasOf(today, id)
   let label: string
-  if (card.status === 'active') label = card.since ? `${alias} \u25b6 ${formatMinutes(minutesBetween(card.since, nowMs))}` : `${alias} \u25b6`
+  const rh = rhythm(today, id, nowMs)
+  if (today.break && card.status === 'active') {
+    const left = Math.max(0, Math.ceil((breakLeftMs(today.break, nowMs) ?? 0) / 60000))
+    label = `${alias} break ${left}/${today.break.minutes ?? 5}`
+  } else if (card.status === 'active') {
+    label = !rh ? `${alias} \u25b6`
+      : rh.due ? `${alias} \u25b6 break due`
+      : rh.kind === 'timed' ? `${alias} \u25b6 ${rh.work}/${rh.total}`
+      : `${alias} \u25b6 ${formatMinutes(rh.work)}`
+  }
   else if (card.status === 'waiting') label = `${alias} waiting ${clockOf(card.waiting_since ?? null)}`
   else label = `${alias} paused`
   return label.slice(0, 24)

@@ -6,7 +6,9 @@ import type { Elements, EngineInterface, PluginOptions, Register, RenderElement 
 
 import type { RoutineForm } from '../types'
 import {
-  BREAKS,
+  BREAK_MINUTES,
+  TECHNIQUES,
+  rhythm,
   PAUSE_REASONS,
   askFor,
   band,
@@ -62,6 +64,8 @@ type Read = { today: Today; problem?: undefined } | { today?: undefined; problem
 let OPTIONS: PluginOptions = {}
 let isReady = false
 let breakToastedFor: string | undefined
+// The work phase whose end was already announced (D67), so the toast comes once.
+let workToastedFor: string | undefined
 // The idle pause (D59): this session's last answer and the timer that checks after it.
 let lastAnswerAt = 0
 let idleTimer: { cancel: () => void } | undefined
@@ -299,11 +303,17 @@ async function sessionCommand($: $, name: string, args: string): Promise<string>
   return `Unknown command /${name}.`
 }
 
-async function startBreak($: $, n: number): Promise<void> {
-  const choice = BREAKS[n] ?? BREAKS[0]!
+/** A break of `minutes`, logged with the rhythm it belongs to (D67, D68). */
+async function startBreak($: $, minutes: number, technique: string): Promise<void> {
   await update($, breakPick, () => false)
-  const out = await write($, { action: 'break_start', data: { technique: choice.technique, minutes: choice.minutes } })
+  const out = await write($, { action: 'break_start', data: { technique, minutes } })
   if (!out.ok) $.ui.toast(`Break: ${out.error}`)
+}
+
+/** The rhythm the user picked for the task (D67); "none" keeps no timer (D68). */
+async function setTechnique($: $, task: string, technique: string): Promise<void> {
+  const out = await write($, { action: 'task_edit', task, data: { changes: { technique } } })
+  if (!out.ok) $.ui.toast(`Rhythm: ${out.error}`)
 }
 
 async function endBreak($: $, phone: boolean): Promise<void> {
@@ -417,6 +427,12 @@ async function setup($: $): Promise<void> {
 
 async function tick($: $): Promise<void> {
   const r = await readToday($)
+  const own = r.today ? ownTask(r.today, await $.session.id()) : undefined
+  const rh = own && r.today && !r.today.break ? rhythm(r.today, own, await $.clock.now()) : undefined
+  if (rh?.due && workToastedFor !== `${own}:${rh.phaseStart}`) {
+    workToastedFor = `${own}:${rh.phaseStart}`
+    $.ui.toast(`${rh.name}: ${rh.total} minutes of work done. Time for a ${rh.rest}-min break.`)
+  }
   const brk = r.today?.break
   if (brk && r.today && band(r.today, await $.clock.now()).break?.isOver && breakToastedFor !== brk.since) {
     breakToastedFor = brk.since
@@ -719,13 +735,23 @@ export const register: Register = (on, options) => {
       ) : (
         <Box key="line" columnGap={1}>
           {head}
-          <Text>{`break: ${b.break.leftMin}m left`}</Text>
+          <Text>{`break ${b.break.leftMin}/${b.break.minutes} left`}</Text>
           <Button key="phone-no" label="End break" onPress={() => endBreak($, false)} />
           {asOfShort}
         </Box>
       )
     } else {
-      const due = b.task?.breakDue === true
+      const rh = b.task?.rhythm
+      const due = rh?.due === true
+      const phase = !b.task
+        ? null
+        : !rh || rh.kind === 'none'
+          ? b.task.elapsed ?? null
+          : rh.due
+            ? `time for a ${rh.rest}-min break`
+            : rh.kind === 'free'
+              ? fit.date ? `free · ${rh.work}m working` : `${rh.work}m`
+              : fit.date ? `${rh.name} · work ${rh.work}/${rh.total}` : `${rh.work}/${rh.total}`
       line = (
         <Box key="line" columnGap={1} flexWrap="nowrap">
           {head}
@@ -733,7 +759,10 @@ export const register: Register = (on, options) => {
           {b.task ? (
             <Box key="task" columnGap={1} flexShrink={1}>
               <Text bold wrap="truncate-end">{b.task.alias} {b.task.title}</Text>
-              {b.task.elapsed ? <Text bold>{b.task.elapsed}</Text> : null}
+              {phase ? <Text bold={!due} color={due ? 'yellow' : undefined}>{phase}</Text> : null}
+              {due && rh && (
+                <Button key="start-break" label="Start break" variant="primary" onPress={() => startBreak($, rh.rest, rh.technique)} />
+              )}
             </Box>
           ) : b.waiting ? (
             <Text wrap="truncate-end">{fit.date ? `${b.waiting.alias} ${b.waiting.title} · waiting since ${b.waiting.since}` : `${b.waiting.alias} ${b.waiting.title} · waiting`}</Text>
@@ -750,14 +779,8 @@ export const register: Register = (on, options) => {
           {b.elsewhere && fit.recap && (
             <Text dimColor wrap="truncate-end">{fit.date ? `now: ${b.elsewhere.alias} ${b.elsewhere.title} elsewhere` : `now: ${b.elsewhere.alias} elsewhere`}</Text>
           )}
-          {(fit.break === 'always' || due) && (
-            <Button
-              key="break"
-              label={due && fit.date ? 'Break (25m up)' : 'Break'}
-              hotkey="b"
-              variant={due ? 'primary' : undefined}
-              onPress={() => update($, breakPick, v => !v)}
-            />
+          {fit.break === 'always' && !due && (
+            <Button key="break" label="Break" hotkey="b" onPress={() => update($, breakPick, v => !v)} />
           )}
           {fit.recap && <Button key="recap" label="Recap" hotkey="r" onPress={() => recap($)} />}
           {fit.tasks && <Button key="tasks" label="Tasks" hotkey="t" onPress={() => void $.ui.open({ id: PANE, title: 'Today' })} />}
@@ -768,11 +791,25 @@ export const register: Register = (on, options) => {
 
     const rows = [line]
     if (picking && !b.break) {
+      const suggested = b.task?.rhythm?.rest || BREAK_MINUTES[0]
+      const technique = b.task?.rhythm?.technique ?? 'none'
       rows.push(
-        <Box key="breaks">
-          <Text dimColor>Break: </Text>
-          {BREAKS.map((choice, n) => (
-            <Button key={`break-${n}`} label={choice.label} variant={n === 0 ? 'primary' : undefined} onPress={() => startBreak($, n)} />
+        <Box key="breaks" columnGap={1}>
+          <Text dimColor>Break:</Text>
+          {BREAK_MINUTES.map((minutes, n) => (
+            <Button key={`break-${n}`} label={`${minutes} min`} variant={minutes === suggested ? 'primary' : undefined} onPress={() => startBreak($, minutes, technique)} />
+          ))}
+        </Box>,
+      )
+    }
+    if (b.task?.rhythm?.unchosen && !b.break) {
+      // First start with no rhythm (D67): one row, pomodoro suggested; no timer until a pick (D68).
+      const task = b.task.id
+      rows.push(
+        <Box key="techniques" columnGap={1}>
+          <Text dimColor>{`Rhythm for ${b.task.alias}:`}</Text>
+          {TECHNIQUES.map((technique, n) => (
+            <Button key={`technique-${n}`} label={technique === 'none' ? 'no timer' : technique} variant={n === 0 ? 'primary' : undefined} onPress={() => setTechnique($, task, technique)} />
           ))}
         </Box>,
       )
