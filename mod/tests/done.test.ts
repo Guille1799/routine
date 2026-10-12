@@ -156,3 +156,15 @@ test('R18: the context tells the model where the drift episode stands', { option
   w.today = today({ drift: { [ACTIVE]: { warned: 1, replies: [{ action: 'back' }], open: false } } })
   expect(await context()).toContain('Warn once per drift')
 })
+
+test('D57: reopen from chat needs the task and the reason, then reaches the writer', { options: OPTIONS }, async ($, on) => {
+  const w = world(on)
+  await $.session.start(START)
+  const noWhy = await $.tool.call({ tool: TOOL, action: 'reopen', task: 'T1' } as never)
+  expect(refusal(noWhy)).toContain('reopening needs why')
+  const noTask = await $.tool.call({ tool: TOOL, action: 'reopen', why: 'x' } as never)
+  expect(refusal(noTask)).toContain('which task?')
+  expect(writes(w)).toEqual([])
+  await $.tool.call({ tool: TOOL, action: 'reopen', task: 'T1', why: C.reopen!.data!.why } as never)
+  expect(writes(w)).toEqual([argvOf(C.reopen!, 't-20261012-aaaaaa')])
+})

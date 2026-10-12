@@ -22,7 +22,8 @@ REPO = Path(__file__).resolve().parent.parent
 CONTRACT = REPO / "mod" / "hooks" / "contract.ts"
 # The order a day would see them in; every contract entry must appear here.
 SCENARIO = ["start", "drift_warn", "drift_reply", "inbox", "said", "break_start", "break_end",
-            "usage", "pause", "start", "pause_click", "pause_reason", "checkpoint", "start", "done"]
+            "usage", "pause", "start", "pause_click", "pause_reason", "checkpoint", "start", "done",
+            "reopen"]
 
 
 def contract() -> dict:
@@ -80,7 +81,8 @@ def test_r16_every_call_the_mod_makes_is_written_by_the_real_writer(data):
                 "output": u["output_tokens"]}
 
     st = state.current(data)
-    assert st["tasks"][task]["status"] == "done"
+    assert st["tasks"][task]["status"] == "pending"  # done, then reopened with a reason (D57)
+    assert st["tasks"][task]["reopened"] == [calls["reopen"]["data"]["why"]]
     assert st["tasks"][task]["done"] == calls["done"]["data"]["fields"]
     assert st["tasks"][task]["notes"][-1] == calls["done"]["data"]["note"]
     assert st["drift"][task]["warned"] == 1

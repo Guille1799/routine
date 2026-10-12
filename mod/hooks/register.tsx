@@ -12,8 +12,11 @@ import {
   band,
   clockOf,
   cleanFields,
+  dayStatus,
   inboxText,
+  localDate,
   missingFields,
+  planDayContext,
   promptContext,
   readWriterAnswer,
   resolveTask,
@@ -32,6 +35,8 @@ const TICK_MS = 30_000
 
 const form = atom({ plugin: 'routine', key: 'form' } as const, null)
 const breakPick = atom({ plugin: 'routine', key: 'breakPick' } as const, false)
+const dayAsked = atom({ plugin: 'routine', key: 'dayAsked' } as const, null)
+const reopening = atom({ plugin: 'routine', key: 'reopen' } as const, null)
 
 const RECAP_PROMPT =
   'Recap for the user coming back: in at most three short lines, where we were in this session ' +
@@ -71,7 +76,7 @@ async function readToday($: $): Promise<Read> {
     return { today: JSON.parse(await $.fs.read(`${dataDir}/state/today.json`)) as Today }
   } catch {
     const exists = await $.fs.stat(dataDir).then(() => true, () => false)
-    return { problem: exists ? 'no diary yet: open the day with the morning skill' : `no data folder: ${dataDir}` }
+    return { problem: exists ? 'no diary yet · /plan-day' : `no data folder: ${dataDir}` }
   }
 }
 
@@ -141,7 +146,7 @@ async function pauseNow($: $): Promise<void> {
     $.ui.toast(`Pause: ${out.error}`)
     return
   }
-  await update($, form, () => ({ kind: 'pause', task, values: {}, draft: null, error: null }))
+  await update($, form, () => ({ kind: 'pause' as const, task, values: {}, draft: null, error: null }))
   await draftNote($, PAUSE_DRAFT_PROMPT)
 }
 
@@ -215,6 +220,16 @@ async function startTask($: $, task: string): Promise<void> {
   await update($, form, f => (f?.kind === 'pause' ? null : f)) // the pause is over: its reason stays as it was
 }
 
+/** Back from done or dropped, with the reason the writer requires (D57). */
+async function reopenTask($: $, task: string, why: string): Promise<void> {
+  if (!why.trim()) {
+    await update($, reopening, x => (x ? { ...x, error: 'Say why first.' } : x))
+    return
+  }
+  const out = await write($, { action: 'reopen', task, data: { why: why.trim() } })
+  await update($, reopening, x => (out.ok ? null : x ? { ...x, error: out.error } : x))
+}
+
 async function startBreak($: $, n: number): Promise<void> {
   const choice = BREAKS[n] ?? BREAKS[0]!
   await update($, breakPick, () => false)
@@ -256,21 +271,21 @@ async function setup($: $): Promise<void> {
     name: 'routine',
     description:
       "The user's daily routine: one active task at a time. Call it when the user starts, pauses or finishes a task " +
-      '("let\'s do T2", "pause", "done"), when a message drifts outside the active task\'s perimeter, ' +
+      '("let\'s do T2", "pause", "done", "reopen T1"), when a message drifts outside the active task\'s perimeter, ' +
       'to capture an idea to the inbox, or to keep something the user said. "T2" is the 2nd task of today.',
     inputSchema: {
       type: 'object',
       properties: {
         action: {
           type: 'string',
-          enum: ['start', 'pause', 'done', 'drift_warn', 'drift_reply', 'inbox', 'said', 'status'],
+          enum: ['start', 'pause', 'done', 'reopen', 'drift_warn', 'drift_reply', 'inbox', 'said', 'status'],
         },
         task: { type: 'string', description: 'T1, T2... or the task id; default: the active task' },
         note: { type: 'string', description: 'pause/done: what was done, where it stopped, next step (you draft it)' },
         fields: { type: 'object', description: 'done: the configured fields, by id' },
         message: { type: 'string', description: 'drift_warn: a short summary of the drifting message' },
         reply: { type: 'string', enum: ['back', 'continue'], description: 'drift_reply' },
-        why: { type: 'string', description: 'drift_reply continue: the reason the user gave' },
+        why: { type: 'string', description: 'drift_reply continue, or reopen: the reason the user gave' },
         text: { type: 'string', description: 'inbox / said: the text' },
         kind: { type: 'string', description: 'said: reaction | answer | thought | statement' },
       },
@@ -405,8 +420,17 @@ export const register: Register = (on, options) => {
     const captured = inboxText(e.text)
     if (captured !== undefined) return { drop: await capture($, captured) }
     const r = await readToday($)
+    const added: string[] = []
+    // Ask to start the day once per session per day, never on every prompt (G, 2026-10-12).
+    const date = localDate(await $.clock.now())
+    const ask = r.today || r.problem.startsWith('no diary') ? planDayContext(dayStatus(r.today, date)) : undefined
+    if (ask && (await read($, dayAsked)) !== date) {
+      added.push(ask)
+      await update($, dayAsked, () => date)
+    }
     const context = r.today ? promptContext(r.today, TOOL) : undefined
-    return context ? next({ ...e, context: [...(e.context ?? []), context] }) : next(e)
+    if (context) added.push(context)
+    return added.length ? next({ ...e, context: [...(e.context ?? []), ...added] }) : next(e)
   }).catch(($, e, next) => next(e)) // a broken read never blocks the prompt
 
   on('turn.complete', async ($, e, next) => {
@@ -471,6 +495,13 @@ export const register: Register = (on, options) => {
         if (noteField && typeof clean[noteField.id] === 'string') data.note = clean[noteField.id]
         return done(await write($, { action: 'done', task, data }), `Done: ${aliasOf(today, task)}.`)
       }
+      case 'reopen': {
+        // Finished is final (D57): only an explicit task and the user's reason bring it back.
+        if (!said || !task) return { deny: `routine: which task? Today: ${taskList(today)}` }
+        const why = s('why')?.trim()
+        if (!why) return { deny: 'routine: reopening needs why: ask the user for the reason in one line' }
+        return done(await write($, { action: 'reopen', task, data: { why } }), `Reopened ${aliasOf(today, task)}: it is pending again.`)
+      }
       case 'drift_warn': {
         if (!today.active) return { deny: 'routine: no active task, so nothing to drift from' }
         const message = s('message')?.trim()
@@ -516,14 +547,16 @@ export const register: Register = (on, options) => {
     const picking = await read($, breakPick)
     const asOf = <Text dimColor> · data {b.asOf}</Text>
 
+    const day = dayStatus(r.today, localDate(now))
     if (!r.today.open) {
       return (
         <Box key="band">
-          <Text dimColor>{b.date} · {r.today.closed ? 'day closed' : 'no day open'}</Text>
+          <Text dimColor>{day.kind === 'none' ? `${day.date} · no day open today · /plan-day` : `${b.date} · day closed`}</Text>
           {asOf}
         </Box>
       )
     }
+    const stale = day.kind === 'stale' ? <Text color="yellow">{day.openDay} still open · /plan-day · </Text> : null
 
     let line
     if (b.break) {
@@ -545,6 +578,7 @@ export const register: Register = (on, options) => {
     } else {
       line = (
         <Box key="line">
+          {stale}
           <Text dimColor>{b.date} · {b.progress} · </Text>
           {b.task ? (
             <Text bold>{b.task.alias} {b.task.title}{b.task.elapsed ? ` · ${b.task.elapsed}` : ''} </Text>
@@ -588,6 +622,9 @@ export const register: Register = (on, options) => {
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { Box, Text, Button } = $.ui.resolve(e)
+    // Asking the reason needs a text field, which every surface but the phone has.
+    const Input = e.surface === 'mobile' ? undefined : $.ui.resolve(e).Input
+    const asking = await read($, reopening)
     const r = await readToday($)
     if (!r.today) return <Box key="tasks"><Text dimColor>{r.problem}</Text></Box>
     const today = r.today
@@ -607,7 +644,17 @@ export const register: Register = (on, options) => {
               {row.action === 'done' && (
                 <Button key={`done-${row.id}`} label="Done" variant="primary" onPress={() => openForm($, 'done')} />
               )}
+              {row.action === 'reopen' && today.open && Input && (
+                <Button key={`reopen-${row.id}`} label="Reopen" onPress={() => update($, reopening, () => ({ task: row.id, error: null }))} />
+              )}
             </Box>
+            {Input && asking?.task === row.id && (
+              <Box key={`why-${row.id}`}>
+                <Input key={`reopen-why-${row.id}`} label="    Why reopen? " placeholder="the reason" onSubmit={(v: string) => reopenTask($, row.id, v)} />
+                <Button key={`reopen-cancel-${row.id}`} label="Cancel" onPress={() => update($, reopening, () => null)} />
+                {asking.error ? <Text color="red"> {asking.error}</Text> : null}
+              </Box>
+            )}
             {row.doneWhen && <Text dimColor>    done when: {row.doneWhen}</Text>}
             {row.firstStep && <Text dimColor>    first step: {row.firstStep}</Text>}
           </Box>
