@@ -41,6 +41,13 @@ function at(technique: string | undefined, since = '2026-10-12T09:30:00+02:00', 
 }
 
 /** What this session's footer chip says on desktop. */
+/** T2 active since `since`, its current work phase begun at `workStarted` (the writer's D73 field). */
+function phased(technique: string, since: string, workStarted: string): Today {
+  const t = at(technique, since)
+  t.tasks[ACTIVE] = { ...t.tasks[ACTIVE]!, work_started: workStarted }
+  return t
+}
+
 async function chip($: Engine) {
   const ui = await $.ui.mount({ plugin: 'routine', surface: 'desktop', component: 'SessionMode', requestId: 'session-mode', props: { modes: [] } as never })
   const shown = (await ui.find({ type: 'Text' }))?.text
@@ -97,7 +104,7 @@ test('R46: during the break the band and the chip count it down; after it the wo
   const ui = await $.ui.mount({ ...band(), surface: 'desktop' })
   expect(await text(ui)).toContain('break 2/5 left')
   expect(await chip($)).toBe('T2 break 2/5')
-  w.today = at('pomodoro 25/5', '2026-10-12T09:00:00+02:00', { last_break_end: '2026-10-12T09:35:00+02:00' })
+  w.today = phased('pomodoro 25/5', '2026-10-12T09:00:00+02:00', '2026-10-12T09:35:00+02:00') // the writer moved the phase to the break's end (D73)
   await ui.redraw()
   expect(await text(ui)).toContain('Pomodoro · work 6/25')
 })
@@ -136,4 +143,25 @@ test('R46: the first start with no rhythm offers the choice in one row; no timer
   w.today = at('50/10')
   await ui.redraw()
   expect(await ui.find({ key: 'technique-0' })).toBeUndefined()
+})
+
+test('D73: after a short pause the phase goes on where it was (the writer shifted it): 19/25 stays 19/25', { options: OPTIONS }, async ($, on) => {
+  // Resumed at 09:39 after a 2-minute pause; 17 minutes had been worked: the writer says 09:22.
+  world(on, { today: phased('pomodoro 25/5', '2026-10-12T09:39:00+02:00', '2026-10-12T09:22:00+02:00') })
+  await $.session.start(START)
+  expect(await text(await $.ui.mount({ ...band(), surface: 'desktop' }))).toContain('Pomodoro · work 19/25')
+  expect(await chip($)).toBe('T2 ▶ 19/25')
+})
+
+test('D73: after a pause as long as the break (lunch) a new phase starts at the resume', { options: OPTIONS }, async ($, on) => {
+  world(on, { today: phased('pomodoro 25/5', '2026-10-12T09:39:00+02:00', '2026-10-12T09:39:00+02:00') })
+  await $.session.start(START)
+  expect(await text(await $.ui.mount({ ...band(), surface: 'desktop' }))).toContain('Pomodoro · work 2/25')
+  expect(await chip($)).toBe('T2 ▶ 2/25')
+})
+
+test('D73: a today.json from before the writer kept the phase counts from the start', { options: OPTIONS }, async ($, on) => {
+  world(on, { today: at('pomodoro 25/5', '2026-10-12T09:30:00+02:00') })
+  await $.session.start(START)
+  expect(await text(await $.ui.mount({ ...band(), surface: 'desktop' }))).toContain('Pomodoro · work 11/25')
 })

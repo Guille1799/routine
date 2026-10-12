@@ -72,8 +72,9 @@ def test_r16_every_call_the_mod_makes_is_written_by_the_real_writer(data):
         st = state.current(data)
         if name == "wait" and n == 1:  # a side task started from pending in its session (D64)
             assert st["tasks"][task]["status"] == "waiting" and st["tasks"][task]["session"] == "session-1"
-        if name == "start":  # the band's elapsed time reads it (R17)
+        if name == "start":  # the band's elapsed time and its work phase read them (R17, D73)
             assert st["tasks"][task]["since"] == json.loads(done.stdout)["events"][-1]["ts"]
+            assert st["tasks"][task]["work_started"] <= st["tasks"][task]["since"]
         if name == "usage":  # the per-task total (R27)
             u = calls["usage"]["data"]
             assert st["tasks"][task]["tokens"] == {
