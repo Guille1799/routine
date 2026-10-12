@@ -54,7 +54,7 @@ function base(over: Partial<Today>): Today {
     tasks: {
       't-20261012-aaaaaa': { id: 't-20261012-aaaaaa', title: 'Answer two mails', status: 'done', notes: [] },
       't-20261012-bbbbbb': {
-        id: 't-20261012-bbbbbb', title: 'Read section 3', status: 'active', since: '2026-10-12T09:00:00+02:00', session: SESSION,
+        id: 't-20261012-bbbbbb', title: 'Read section 3', status: 'active', since: '2026-10-12T09:00:00+02:00', session: SESSION, technique: 'none',
         done_when: 'notes written', first_step: 'open the pdf', perimeter: 'questions about the text, unknown terms',
         notes: ['read 3.1; next 3.2'],
       },

@@ -6,7 +6,9 @@ import type { Elements, EngineInterface, PluginOptions, Register, RenderElement 
 
 import type { RoutineForm } from '../types'
 import {
-  BREAKS,
+  BREAK_MINUTES,
+  TECHNIQUES,
+  rhythm,
   PAUSE_REASONS,
   askFor,
   band,
@@ -62,6 +64,8 @@ type Read = { today: Today; problem?: undefined } | { today?: undefined; problem
 let OPTIONS: PluginOptions = {}
 let isReady = false
 let breakToastedFor: string | undefined
+// The work phase whose end was already announced (D67), so the toast comes once.
+let workToastedFor: string | undefined
 // The idle pause (D59): this session's last answer and the timer that checks after it.
 let lastAnswerAt = 0
 let idleTimer: { cancel: () => void } | undefined
@@ -244,11 +248,72 @@ async function waitTask($: $, task: string): Promise<void> {
   if (!out.ok) $.ui.toast(`Wait: ${out.error}`)
 }
 
-async function startBreak($: $, n: number): Promise<void> {
-  const choice = BREAKS[n] ?? BREAKS[0]!
+const SESSION_COMMANDS = [
+  { name: 'pause', description: "Pause this session's task (a reason may follow: /pause interrupted)", argumentHint: '[reason]' },
+  { name: 'resume', description: "Resume this session's paused or waiting task" },
+  { name: 'done', description: "Finish this session's task: opens the done row above the prompt" },
+  { name: 'wait', description: "Let this session's task (or the one named) run here on its own", argumentHint: '[T#]' },
+  { name: 'tasks', description: "Open today's task list" },
+] as const
+
+/**
+ * The session commands (D64): each acts on THIS session's task and answers in one line, with
+ * no model turn. /recap is the engine's own, which the person may run; a plugin may not.
+ */
+async function sessionCommand($: $, name: string, args: string): Promise<string> {
+  if (name === 'tasks') {
+    await $.ui.open({ id: PANE, title: 'Today' })
+    return "Today's tasks are open."
+  }
+  const r = await readToday($)
+  if (!r.today) return `routine: ${r.problem}`
+  const today = r.today
+  const own = ownTask(today, await $.session.id())
+  const card = own ? today.tasks[own] : undefined
+  const alias = own ? aliasOf(today, own) : ''
+  if (name === 'wait' && args) {
+    const named = resolveTask(today, args)
+    if (!named) return `No task ${args} today.`
+    const out = await write($, { action: 'wait', task: named })
+    return out.ok ? `${aliasOf(today, named)} runs here on its own (waiting).` : `Wait: ${out.error}`
+  }
+  if (!own || !card) return "No task in this session. Say \"let's do T#\", or /wait T# for a side task."
+  if (name === 'pause') {
+    if (card.status !== 'active') return `${alias} is ${card.status}: nothing to pause.`
+    const reason = args.trim().toLowerCase()
+    if (reason && !(PAUSE_REASONS as readonly string[]).includes(reason)) return `Unknown reason "${args}". One of: ${PAUSE_REASONS.join(', ')}.`
+    await pauseNow($, own)
+    if (!reason) return `Paused ${alias}. Why? Pick it on the band, or /pause <reason> next time.`
+    await setReason($, own, reason)
+    return `Paused ${alias}: ${reason}.`
+  }
+  if (name === 'resume') {
+    if (card.status === 'active') return `${alias} is already running.`
+    await startTask($, own)
+    return `Resumed ${alias}.`
+  }
+  if (name === 'done') {
+    await openForm($, own)
+    return `Done row for ${alias} is open above the prompt.`
+  }
+  if (name === 'wait') {
+    const out = await write($, { action: 'wait', task: own })
+    return out.ok ? `${alias} runs here on its own (waiting).` : `Wait: ${out.error}`
+  }
+  return `Unknown command /${name}.`
+}
+
+/** A break of `minutes`, logged with the rhythm it belongs to (D67, D68). */
+async function startBreak($: $, minutes: number, technique: string): Promise<void> {
   await update($, breakPick, () => false)
-  const out = await write($, { action: 'break_start', data: { technique: choice.technique, minutes: choice.minutes } })
+  const out = await write($, { action: 'break_start', data: { technique, minutes } })
   if (!out.ok) $.ui.toast(`Break: ${out.error}`)
+}
+
+/** The rhythm the user picked for the task (D67); "none" keeps no timer (D68). */
+async function setTechnique($: $, task: string, technique: string): Promise<void> {
+  const out = await write($, { action: 'task_edit', task, data: { changes: { technique } } })
+  if (!out.ok) $.ui.toast(`Rhythm: ${out.error}`)
 }
 
 async function endBreak($: $, phone: boolean): Promise<void> {
@@ -353,6 +418,8 @@ async function setup($: $): Promise<void> {
     argumentHint: '<text>',
     immediate: true,
   })
+  // This session's task from its own prompt (D64): a split view shows the band in one pane only.
+  for (const command of SESSION_COMMANDS) await $.command.register({ ...command, immediate: true })
   $.clock.every(TICK_MS, () => void tick($))
   await refreshSnapshot($)
   await idleCheck($) // after a load, idleness counts from the diary's last event
@@ -360,6 +427,12 @@ async function setup($: $): Promise<void> {
 
 async function tick($: $): Promise<void> {
   const r = await readToday($)
+  const own = r.today ? ownTask(r.today, await $.session.id()) : undefined
+  const rh = own && r.today && !r.today.break ? rhythm(r.today, own, await $.clock.now()) : undefined
+  if (rh?.due && workToastedFor !== `${own}:${rh.phaseStart}`) {
+    workToastedFor = `${own}:${rh.phaseStart}`
+    $.ui.toast(`${rh.name}: ${rh.total} minutes of work done. Time for a ${rh.rest}-min break.`)
+  }
   const brk = r.today?.break
   if (brk && r.today && band(r.today, await $.clock.now()).break?.isOver && breakToastedFor !== brk.since) {
     breakToastedFor = brk.since
@@ -470,8 +543,17 @@ export const register: Register = (on, options) => {
 
   on('command.run', { command: 'inbox' }, async ($, e) => ({ text: await capture($, e.args.trim()) }))
 
+  on('command.run', { command: 'pause' }, async ($, e) => ({ text: await sessionCommand($, 'pause', e.args.trim()) }))
+  on('command.run', { command: 'resume' }, async ($, e) => ({ text: await sessionCommand($, 'resume', e.args.trim()) }))
+  on('command.run', { command: 'done' }, async ($, e) => ({ text: await sessionCommand($, 'done', e.args.trim()) }))
+  on('command.run', { command: 'wait' }, async ($, e) => ({ text: await sessionCommand($, 'wait', e.args.trim()) }))
+  on('command.run', { command: 'tasks' }, async ($, e) => ({ text: await sessionCommand($, 'tasks', e.args.trim()) }))
+
   on('prompt.submit', async ($, e, next) => {
     if (!(await isInteractive($))) return next(e)
+    // The tool and commands are registered at start or attach; after a resume or a reload the
+    // attach may come late or not again, so the first interactive prompt makes sure of them.
+    await setup($)
     idleTimer?.cancel() // the user is here: no idle pause until the next answer ends
     idleTimer = undefined
     const captured = inboxText(e.text)
@@ -656,13 +738,23 @@ export const register: Register = (on, options) => {
       ) : (
         <Box key="line" columnGap={1}>
           {head}
-          <Text>{`break: ${b.break.leftMin}m left`}</Text>
+          <Text>{`break ${b.break.leftMin}/${b.break.minutes} left`}</Text>
           <Button key="phone-no" label="End break" onPress={() => endBreak($, false)} />
           {asOfShort}
         </Box>
       )
     } else {
-      const due = b.task?.breakDue === true
+      const rh = b.task?.rhythm
+      const due = rh?.due === true
+      const phase = !b.task
+        ? null
+        : !rh || rh.kind === 'none'
+          ? b.task.elapsed ?? null
+          : rh.due
+            ? `time for a ${rh.rest}-min break`
+            : rh.kind === 'free'
+              ? fit.date ? `free · ${rh.work}m working` : `${rh.work}m`
+              : fit.date ? `${rh.name} · work ${rh.work}/${rh.total}` : `${rh.work}/${rh.total}`
       line = (
         <Box key="line" columnGap={1} flexWrap="nowrap">
           {head}
@@ -670,7 +762,10 @@ export const register: Register = (on, options) => {
           {b.task ? (
             <Box key="task" columnGap={1} flexShrink={1}>
               <Text bold wrap="truncate-end">{b.task.alias} {b.task.title}</Text>
-              {b.task.elapsed ? <Text bold>{b.task.elapsed}</Text> : null}
+              {phase ? <Text bold={!due} color={due ? 'yellow' : undefined}>{phase}</Text> : null}
+              {due && rh && (
+                <Button key="start-break" label="Start break" variant="primary" onPress={() => startBreak($, rh.rest, rh.technique)} />
+              )}
             </Box>
           ) : b.waiting ? (
             <Text wrap="truncate-end">{fit.date ? `${b.waiting.alias} ${b.waiting.title} · waiting since ${b.waiting.since}` : `${b.waiting.alias} ${b.waiting.title} · waiting`}</Text>
@@ -687,14 +782,8 @@ export const register: Register = (on, options) => {
           {b.elsewhere && fit.recap && (
             <Text dimColor wrap="truncate-end">{fit.date ? `now: ${b.elsewhere.alias} ${b.elsewhere.title} elsewhere` : `now: ${b.elsewhere.alias} elsewhere`}</Text>
           )}
-          {(fit.break === 'always' || due) && (
-            <Button
-              key="break"
-              label={due && fit.date ? 'Break (25m up)' : 'Break'}
-              hotkey="b"
-              variant={due ? 'primary' : undefined}
-              onPress={() => update($, breakPick, v => !v)}
-            />
+          {fit.break === 'always' && !due && (
+            <Button key="break" label="Break" hotkey="b" onPress={() => update($, breakPick, v => !v)} />
           )}
           {fit.recap && <Button key="recap" label="Recap" hotkey="r" onPress={() => recap($)} />}
           {fit.tasks && <Button key="tasks" label="Tasks" hotkey="t" onPress={() => void $.ui.open({ id: PANE, title: 'Today' })} />}
@@ -705,11 +794,25 @@ export const register: Register = (on, options) => {
 
     const rows = [line]
     if (picking && !b.break) {
+      const suggested = b.task?.rhythm?.rest || BREAK_MINUTES[0]
+      const technique = b.task?.rhythm?.technique ?? 'none'
       rows.push(
-        <Box key="breaks">
-          <Text dimColor>Break: </Text>
-          {BREAKS.map((choice, n) => (
-            <Button key={`break-${n}`} label={choice.label} variant={n === 0 ? 'primary' : undefined} onPress={() => startBreak($, n)} />
+        <Box key="breaks" columnGap={1}>
+          <Text dimColor>Break:</Text>
+          {BREAK_MINUTES.map((minutes, n) => (
+            <Button key={`break-${n}`} label={`${minutes} min`} variant={minutes === suggested ? 'primary' : undefined} onPress={() => startBreak($, minutes, technique)} />
+          ))}
+        </Box>,
+      )
+    }
+    if (b.task?.rhythm?.unchosen && !b.break) {
+      // First start with no rhythm (D67): one row, pomodoro suggested; no timer until a pick (D68).
+      const task = b.task.id
+      rows.push(
+        <Box key="techniques" columnGap={1}>
+          <Text dimColor>{`Rhythm for ${b.task.alias}:`}</Text>
+          {TECHNIQUES.map((technique, n) => (
+            <Button key={`technique-${n}`} label={technique === 'none' ? 'no timer' : technique} variant={n === 0 ? 'primary' : undefined} onPress={() => setTechnique($, task, technique)} />
           ))}
         </Box>,
       )
@@ -723,8 +826,25 @@ export const register: Register = (on, options) => {
   // split view, where it draws the band only in the active one. Added to the engine's modes.
   on('ui.render', { component: 'SessionMode' }, async ($, e, next) => {
     const r = await readToday($)
-    const chip = sessionChip(r.today, await $.session.id(), await $.clock.now())
-    return chip ? next({ ...e, props: { ...e.props, modes: [...e.props.modes, chip] } }) : next(e)
+    const session = await $.session.id()
+    const chip = sessionChip(r.today, session, await $.clock.now())
+    if (!chip) return next(e)
+    if (e.surface !== 'desktop') return next({ ...e, props: { ...e.props, modes: [...e.props.modes, chip] } })
+    // Desktop keeps a Button in the chip and makes it clickable in every pane (it cannot take
+    // the keyboard: only Pane and AbovePrompt hold focus), so the chip acts on THIS session.
+    const { Box, Text, Button } = $.ui.resolve(e)
+    const own = r.today ? ownTask(r.today, session) : undefined
+    const status = own ? r.today?.tasks[own]?.status : undefined
+    return (
+      <Box key="chip">
+        <Text>{[...e.props.modes, chip].join(' & ')}</Text>
+        {own && status === 'active' && <Button key="chip-pause" label="pause" onPress={() => pauseNow($, own)} />}
+        {own && status === 'paused' && (
+          <Button key="chip-resume" label="resume" onPress={() => startTask($, own)} />
+        )}
+        {own && <Button key="chip-recap" label="recap" onPress={() => recap($)} />}
+      </Box>
+    )
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {

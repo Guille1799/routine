@@ -57,7 +57,7 @@ test('R15: a desktop session that attaches after start gets the tool then', { op
   w.surfaces = ['desktop']
   await $.session.attach({ clientId: 'c1', surface: 'desktop' } as never)
   expect(w.registeredTools).toEqual(['routine'])
-  expect(w.registeredCommands).toEqual(['inbox'])
+  expect(w.registeredCommands).toEqual(['inbox', 'pause', 'resume', 'done', 'wait', 'tasks'])
 })
 
 test('R16: "let\'s do T3" starts the stable id through the writer and hands back the card', { options: OPTIONS }, async ($, on) => {
@@ -135,4 +135,17 @@ test('R27: no active task, no usage event', { options: OPTIONS }, async ($, on) 
   await $.session.start(START)
   await $.turn.complete({ answer: 'ok', durationMs: 5, isAborted: false, turnId: 't1', reason: 'answer', usage: USAGE } as never)
   expect(writes(w)).toEqual([])
+})
+
+test('R15: a resumed session whose surface is there but never re-attached still gets the tool at its first prompt', { options: OPTIONS }, async ($, on) => {
+  // Desktop after a restart or a reload of the mod: session.start saw no surface yet, and the
+  // client that is already attached raises no new session.attach.
+  const w = world(on, { surfaces: [] })
+  await $.session.start(START)
+  expect(w.registeredTools).toEqual([])
+  w.surfaces = ['desktop']
+  await $.prompt.submit(prompt('hello again'))
+  expect(w.registeredTools).toEqual(['routine'])
+  await $.prompt.submit(prompt('and again'))
+  expect(w.registeredTools).toEqual(['routine']) // once
 })

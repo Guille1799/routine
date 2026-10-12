@@ -47,13 +47,13 @@ describe('band', () => {
     const brk = { technique: 'pomodoro', minutes: 5, since: '2026-10-12T09:38:00+02:00' }
     expect(breakLeftMs(brk, NOW)).toBe(2 * 60000)
     expect(breakLeftMs({ ...brk, minutes: null }, NOW)).toBe(2 * 60000)
-    expect(band(today({ break: brk }), NOW + 3 * 60000).break).toEqual({ leftMin: 0, isOver: true })
+    expect(band(today({ break: brk }), NOW + 3 * 60000).break).toEqual({ leftMin: 0, minutes: 5, isOver: true })
   })
 
   test('elapsed time is shown only when the writer says when the task started', () => {
     const t = today()
     delete t.tasks['t-20261012-bbbbbb']!.since
-    expect(band(t, NOW, SESSION).task).toEqual({ id: 't-20261012-bbbbbb', alias: 'T2', title: 'Read section 3', elapsed: undefined, breakDue: false })
+    expect(band(t, NOW, SESSION).task).toEqual({ id: 't-20261012-bbbbbb', alias: 'T2', title: 'Read section 3', elapsed: undefined, rhythm: undefined })
   })
 })
 

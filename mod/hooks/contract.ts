@@ -12,11 +12,12 @@ import type { WriterCall } from './core'
 export const WRITER_CALLS: Record<string, WriterCall> = /* contract:start */ {
   "start": { "action": "start", "task": "$task" },
   "task_edit": { "action": "task_edit", "task": "$task", "data": { "changes": { "first_step": "open the pdf at 3.3" } } },
+  "task_edit_technique": { "action": "task_edit", "task": "$task", "data": { "changes": { "technique": "50/10" } } },
   "drift_warn": { "action": "drift_warn", "task": "$task", "data": { "message": "asked about the weekend" } },
   "drift_reply": { "action": "drift_reply", "task": "$task", "data": { "action": "continue", "why": "it is related after all" } },
   "inbox": { "action": "inbox", "data": { "text": "buy milk" } },
   "said": { "action": "said", "data": { "text": "this clicked for me", "kind": "reaction" } },
-  "break_start": { "action": "break_start", "data": { "technique": "pomodoro", "minutes": 5 } },
+  "break_start": { "action": "break_start", "data": { "technique": "pomodoro 25/5", "minutes": 5 } },
   "break_end": { "action": "break_end", "data": { "phone": false } },
   "usage": { "action": "usage", "task": "$task", "data": { "input_tokens": 120, "output_tokens": 40, "cache_read_input_tokens": 900, "cache_creation_input_tokens": 0, "model": "claude-test" } },
   "pause": { "action": "pause", "task": "$task", "data": { "note": "read 3.1; stopped at 3.2; next: the figure" } },
