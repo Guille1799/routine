@@ -11,6 +11,8 @@ import {
   askFor,
   band,
   bandFit,
+  cardChanges,
+  PANE_EDIT_FIELDS,
   clockOf,
   cleanFields,
   dayStatus,
@@ -41,6 +43,7 @@ const form = atom({ plugin: 'routine', key: 'form' } as const, null)
 const breakPick = atom({ plugin: 'routine', key: 'breakPick' } as const, false)
 const dayAsked = atom({ plugin: 'routine', key: 'dayAsked' } as const, null)
 const reopening = atom({ plugin: 'routine', key: 'reopen' } as const, null)
+const editing = atom({ plugin: 'routine', key: 'editing' } as const, null)
 
 const RECAP_PROMPT =
   'Recap for the user coming back: in at most three short lines, where we were in this session ' +
@@ -224,6 +227,26 @@ async function reopenTask($: $, task: string, why: string): Promise<void> {
   await update($, reopening, x => (out.ok ? null : x ? { ...x, error: out.error } : x))
 }
 
+/** Writes what changed in the card being edited (D61); the writer refuses an emptied start field. */
+async function saveEdit($: $, task: string): Promise<void> {
+  const ed = await read($, editing)
+  const r = await readToday($)
+  const card = r.today?.tasks[task]
+  if (!ed || !card) return
+  const changes = cardChanges(card, ed.values)
+  if (Object.keys(changes).length === 0) {
+    await update($, editing, () => null)
+    return
+  }
+  const out = await write($, { action: 'task_edit', task, data: { changes } })
+  await update($, editing, x => (out.ok ? null : x ? { ...x, error: out.error } : x))
+}
+
+async function setPriority($: $, task: string, priority: boolean): Promise<void> {
+  const out = await write($, { action: 'task_edit', task, data: { changes: { priority } } })
+  if (!out.ok) $.ui.toast(`Priority: ${out.error}`)
+}
+
 async function startBreak($: $, n: number): Promise<void> {
   const choice = BREAKS[n] ?? BREAKS[0]!
   await update($, breakPick, () => false)
@@ -308,11 +331,15 @@ async function setup($: $): Promise<void> {
       properties: {
         action: {
           type: 'string',
-          enum: ['start', 'pause', 'done', 'reopen', 'drift_warn', 'drift_reply', 'inbox', 'said', 'status'],
+          enum: ['start', 'pause', 'done', 'reopen', 'edit', 'drift_warn', 'drift_reply', 'inbox', 'said', 'status'],
         },
         task: { type: 'string', description: 'T1, T2... or the task id; default: the active task' },
         note: { type: 'string', description: 'pause/done: what was done, where it stopped, next step (you draft it)' },
         fields: { type: 'object', description: 'done: the configured fields, by id' },
+        changes: {
+          type: 'object',
+          description: 'edit: the card fields to change: title, done_when, first_step, perimeter, kind, project, priority (true/false). The three start fields cannot be emptied.',
+        },
         message: { type: 'string', description: 'drift_warn: a short summary of the drifting message' },
         reply: { type: 'string', enum: ['back', 'continue'], description: 'drift_reply' },
         why: { type: 'string', description: 'drift_reply continue, or reopen: the reason the user gave' },
@@ -539,6 +566,13 @@ export const register: Register = (on, options) => {
         if (!why) return { deny: 'routine: reopening needs why: ask the user for the reason in one line' }
         return done(await write($, { action: 'reopen', task, data: { why } }), `Reopened ${aliasOf(today, task)}: it is pending again.`)
       }
+      case 'edit': {
+        // D61: the writer checks which fields are editable and that start fields stay filled.
+        if (!task) return { deny: `routine: which task? Today: ${taskList(today)}` }
+        const changes = typeof input.changes === 'object' && input.changes ? (input.changes as Record<string, unknown>) : {}
+        if (Object.keys(changes).length === 0) return { deny: 'routine: edit needs changes, e.g. {"first_step": "..."}' }
+        return done(await write($, { action: 'task_edit', task, data: { changes } }), `Edited ${aliasOf(today, task)}: ${Object.keys(changes).join(', ')}.`)
+      }
       case 'drift_warn': {
         if (!today.active) return { deny: 'routine: no active task, so nothing to drift from' }
         const message = s('message')?.trim()
@@ -676,6 +710,7 @@ export const register: Register = (on, options) => {
     // Asking the reason needs a text field, which every surface but the phone has.
     const Input = e.surface === 'mobile' ? undefined : $.ui.resolve(e).Input
     const asking = await read($, reopening)
+    const ed = await read($, editing)
     const r = await readToday($)
     if (!r.today) return <Box key="tasks"><Text dimColor>{r.problem}</Text></Box>
     const today = r.today
@@ -692,17 +727,42 @@ export const register: Register = (on, options) => {
         {rows.map(row => (
           <Box key={`task-${row.id}`} flexDirection="column">
             <Box key={`head-${row.id}`}>
-              <Text bold={row.action === 'done'}>{row.mark} {row.alias} {row.title}{row.carried ? ` · carried ${row.carried}x` : ''} </Text>
+              <Text bold={row.action === 'done'}>{row.mark} {row.alias} {row.priority ? '★ ' : ''}{row.title}{row.carried ? ` · carried ${row.carried}x` : ''} </Text>
               {row.action === 'start' && today.open && (
                 <Button key={`start-${row.id}`} label="Start" onPress={() => startTask($, row.id)} />
               )}
               {row.action === 'done' && (
                 <Button key={`done-${row.id}`} label="Done" variant="primary" onPress={() => openForm($, 'done')} />
               )}
+              {row.action !== 'reopen' && Input && ed?.task !== row.id && (
+                <Button key={`edit-${row.id}`} label="Edit" onPress={() => update($, editing, () => ({ task: row.id, values: {}, error: null }))} />
+              )}
+              {row.priority && row.action !== 'reopen' && (
+                <Button key={`unprioritize-${row.id}`} label="Unset priority" onPress={() => setPriority($, row.id, false)} />
+              )}
               {row.action === 'reopen' && today.open && Input && (
                 <Button key={`reopen-${row.id}`} label="Reopen" onPress={() => update($, reopening, () => ({ task: row.id, error: null }))} />
               )}
             </Box>
+            {Input && ed?.task === row.id && (
+              <Box key={`editing-${row.id}`} flexDirection="column">
+                {PANE_EDIT_FIELDS.map(([field, label]) => (
+                  <Input
+                    key={`edit-${field}-${row.id}`}
+                    label={`    ${label}: `}
+                    value={ed.values[field] ?? String(today.tasks[row.id]?.[field] ?? '')}
+                    onInput={(v: string) => update($, editing, x => (x ? { ...x, values: { ...x.values, [field]: v }, error: null } : x))}
+                    onSubmit={(v: string) => update($, editing, x => (x ? { ...x, values: { ...x.values, [field]: v }, error: null } : x))}
+                  />
+                ))}
+                <Box key={`edit-actions-${row.id}`} columnGap={1}>
+                  <Text>    </Text>
+                  <Button key={`edit-save-${row.id}`} label="Save" variant="primary" onPress={() => saveEdit($, row.id)} />
+                  <Button key={`edit-cancel-${row.id}`} label="Cancel" onPress={() => update($, editing, () => null)} />
+                  {ed.error ? <Text color="red">{ed.error}</Text> : null}
+                </Box>
+              </Box>
+            )}
             {Input && asking?.task === row.id && (
               <Box key={`why-${row.id}`}>
                 <Input key={`reopen-why-${row.id}`} label="    Why reopen? " placeholder="the reason" onSubmit={(v: string) => reopenTask($, row.id, v)} />

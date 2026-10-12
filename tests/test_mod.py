@@ -96,3 +96,11 @@ def test_r32_done_fields_from_config():
 
 def test_r34_pause_at_the_click_reason_and_leaving():
     proven("R34")
+
+
+def test_r36_ask_to_start_the_day_once_per_session_per_day():
+    proven("R36")
+
+
+def test_r38_idle_pause_after_configured_minutes():
+    proven("R38")

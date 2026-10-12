@@ -11,6 +11,7 @@ import type { WriterCall } from './core'
 
 export const WRITER_CALLS: Record<string, WriterCall> = /* contract:start */ {
   "start": { "action": "start", "task": "$task" },
+  "task_edit": { "action": "task_edit", "task": "$task", "data": { "changes": { "first_step": "open the pdf at 3.3" } } },
   "drift_warn": { "action": "drift_warn", "task": "$task", "data": { "message": "asked about the weekend" } },
   "drift_reply": { "action": "drift_reply", "task": "$task", "data": { "action": "continue", "why": "it is related after all" } },
   "inbox": { "action": "inbox", "data": { "text": "buy milk" } },

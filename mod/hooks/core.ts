@@ -51,7 +51,7 @@ export type FieldValue = string | boolean
 
 // The writer CLI's actions this mod uses. The CLI spells them with dashes.
 export type WriterAction =
-  | 'start' | 'pause' | 'pause_reason' | 'checkpoint' | 'done' | 'reopen' | 'drift_warn' | 'drift_reply'
+  | 'start' | 'pause' | 'pause_reason' | 'checkpoint' | 'done' | 'reopen' | 'task_edit' | 'drift_warn' | 'drift_reply'
   | 'inbox' | 'said' | 'break_start' | 'break_end' | 'usage'
 
 export type WriterCall = {
@@ -209,6 +209,8 @@ export type TaskRow = {
   doneWhen?: string
   firstStep?: string
   carried: number
+  /** The day's one priority (D10). */
+  priority: boolean
   /** What the row offers: start a pending or paused task, finish the active one, reopen a finished one (D57). */
   action: 'start' | 'done' | 'reopen' | null
 }
@@ -226,6 +228,7 @@ export function taskRows(today: Today): TaskRow[] {
       doneWhen: t?.done_when,
       firstStep: t?.first_step,
       carried: t?.carried ?? 0,
+      priority: t?.priority === true,
       action: status === 'active' ? 'done' : status === 'pending' || status === 'paused' ? 'start' : 'reopen',
     }
   })
@@ -415,4 +418,22 @@ export function idleDue(today: Today | undefined, lastAnswerAt: number, minutes:
   const seen = [lastAnswerAt, today.last_ts ? Date.parse(today.last_ts) : 0, card.since ? Date.parse(card.since) : 0]
   const due = Math.max(...seen.filter(Number.isFinite)) + minutes * 60000
   return nowMs >= due ? { kind: 'pause', task: today.active } : { kind: 'wait', ms: due - nowMs }
+}
+
+/** The card fields the pane edits in place; kind, project and priority also go through chat (D61). */
+export const PANE_EDIT_FIELDS = [
+  ['title', 'Title'],
+  ['done_when', 'Done when'],
+  ['first_step', 'First step'],
+  ['perimeter', 'Perimeter'],
+] as const
+
+/** Only what changed, trimmed: the edit the writer receives. Empty start fields are the writer's to refuse. */
+export function cardChanges(card: Card, values: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const [field] of PANE_EDIT_FIELDS) {
+    const v = values[field]
+    if (v !== undefined && v.trim() !== String(card[field] ?? '').trim()) out[field] = v.trim()
+  }
+  return out
 }

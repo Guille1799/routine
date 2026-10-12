@@ -45,9 +45,9 @@ piece that owns it is being built.
 | R33 | The writer CLI has stable exit codes: 0 written, 1 refused, 2 no data folder | D35, D46 | tests/test_writer.py::test_cli_exit_codes |
 | R35 | Finished tasks are final until reopened with a reason; done without start is marked | D57 | tests/test_writer.py::test_d57_finished_tasks_are_final_until_reopened |
 | R34 | Pause is written at the click; its reason comes from buttons only, starts as none and changes only while the pause lasts; a pause writes no context | D56 | tests/test_writer.py::test_r34_pause_stops_at_the_click_and_the_reason_is_set_while_it_lasts |
-| R36 | The first prompt of the day asks whether to start the day, once per session per day | D58 | pending: P3 |
+| R36 | The first prompt of the day asks whether to start the day, once per session per day | D58 | tests/test_mod.py::test_r36_ask_to_start_the_day_once_per_session_per_day |
 | R37 | Task cards can be edited, never emptied of their start fields | D61 | tests/test_writer.py::test_r37_task_card_can_be_edited_but_not_emptied |
-| R38 | Automatic pause after idle minutes, configurable, reason idle | D59 | pending: P3 |
+| R38 | Automatic pause after idle minutes, configurable, reason idle | D59 | tests/test_mod.py::test_r38_idle_pause_after_configured_minutes |
 
 ## Decisions without a requirement
 

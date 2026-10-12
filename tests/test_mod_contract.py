@@ -21,7 +21,7 @@ from routine import state
 REPO = Path(__file__).resolve().parent.parent
 CONTRACT = REPO / "mod" / "hooks" / "contract.ts"
 # The order a day would see them in; every contract entry must appear here.
-SCENARIO = ["start", "drift_warn", "drift_reply", "inbox", "said", "break_start", "break_end",
+SCENARIO = ["task_edit", "start", "drift_warn", "drift_reply", "inbox", "said", "break_start", "break_end",
             "usage", "pause", "start", "pause_click", "pause_reason", "checkpoint", "start", "pause_idle", "start", "done",
             "reopen"]
 

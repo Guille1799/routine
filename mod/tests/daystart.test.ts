@@ -22,7 +22,7 @@ async function bandText(ui: { drawn: () => Promise<unknown> }): Promise<string> 
   return parts.join(' ').replace(/\s+/g, ' ') // siblings sit a gap apart
 }
 
-test('plan-day: with no diary the session asks once, and the band points to /plan-day', { options: OPTIONS }, async ($, on) => {
+test('R36: with no diary the session asks once, and the band points to /plan-day', { options: OPTIONS }, async ($, on) => {
   const w = world(on, { today: undefined })
   await $.session.start(START)
   const first = await context($)
@@ -34,7 +34,7 @@ test('plan-day: with no diary the session asks once, and the band points to /pla
   expect(writes(w)).toEqual([])
 })
 
-test('plan-day: yesterday closed, today not opened: ask once; the band says so', { options: OPTIONS }, async ($, on) => {
+test('R36: yesterday closed, today not opened: ask once; the band says so', { options: OPTIONS }, async ($, on) => {
   world(on, { today: today({ day: '2026-10-11', open: false, closed: true, active: null }) })
   await $.session.start(START)
   expect(await context($)).toContain(ASK)
@@ -43,7 +43,7 @@ test('plan-day: yesterday closed, today not opened: ask once; the band says so',
   expect(await bandText(ui)).toContain('2026-10-12 · no day open today · /plan-day')
 })
 
-test('plan-day: yesterday still open: /plan-day closes it first, and the task context stays', { options: OPTIONS }, async ($, on) => {
+test('R36: yesterday still open: /plan-day closes it first, and the task context stays', { options: OPTIONS }, async ($, on) => {
   world(on, { today: today({ day: '2026-10-11' }) })
   await $.session.start(START)
   const first = await context($)
@@ -57,7 +57,7 @@ test('plan-day: yesterday still open: /plan-day closes it first, and the task co
   expect(await bandText(ui)).toContain('2026-10-11 still open · /plan-day 2026-10-11')
 })
 
-test('plan-day: a day open for today asks nothing', { options: OPTIONS }, async ($, on) => {
+test('R36: a day open for today asks nothing', { options: OPTIONS }, async ($, on) => {
   world(on)
   await $.session.start(START)
   expect(await context($)).not.toContain('/plan-day')
@@ -65,7 +65,7 @@ test('plan-day: a day open for today asks nothing', { options: OPTIONS }, async 
   expect(await bandText(ui)).not.toContain('/plan-day')
 })
 
-test('plan-day: the next day, the same session asks again, once', { options: OPTIONS }, async ($, on) => {
+test('R36: the next day, the same session asks again, once', { options: OPTIONS }, async ($, on) => {
   const w = world(on, { today: today({ day: '2026-10-11', open: false, closed: true, active: null }) })
   await $.session.start(START)
   expect(await context($)).toContain(ASK)
@@ -76,13 +76,13 @@ test('plan-day: the next day, the same session asks again, once', { options: OPT
   expect(await context($)).not.toContain(ASK)
 })
 
-test('plan-day: a non-interactive run (claude -p) is never asked', { options: OPTIONS }, async ($, on) => {
+test('R36: a non-interactive run (claude -p) is never asked', { options: OPTIONS }, async ($, on) => {
   world(on, { today: undefined, surfaces: [] })
   await $.session.start(START)
   expect(await context($)).toBe('')
 })
 
-test('plan-day: a missing data folder is not a day to plan: nothing is asked', { options: OPTIONS }, async ($, on) => {
+test('R36: a missing data folder is not a day to plan: nothing is asked', { options: OPTIONS }, async ($, on) => {
   world(on, { today: undefined, dataExists: false })
   await $.session.start(START)
   expect(await context($)).not.toContain(ASK)
