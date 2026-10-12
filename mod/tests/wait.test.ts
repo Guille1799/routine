@@ -46,7 +46,7 @@ test('R39: "T2 can run on its own" sets the active task waiting through the writ
   await $.session.start(START)
   await $.tool.call({ tool: TOOL, action: 'wait' } as never)
   expect(writes(w)).toEqual([argvOf(C.wait!, ACTIVE)])
-  w.today = today({ active: null })
+  w.session = 'session-2' // a session with no task of its own must name one
   expect(refusal(await $.tool.call({ tool: TOOL, action: 'wait' } as never))).toContain('which task waits?')
   w.writerExit = 1
   expect(refusal(await $.tool.call({ tool: TOOL, action: 'wait', task: 'T1' } as never))).toContain('refused by the writer')
@@ -62,12 +62,12 @@ test('R39: the band offers Wait on the active task, and keeps it off a narrow ba
   expect(await narrow.find({ key: 'wait' })).toBeUndefined()
 })
 
-test('R39: the band says what waits and since when, shorter when narrow', { options: OPTIONS }, async ($, on) => {
+test('R39: the band of the session working on it says it waits and since when, shorter when narrow', { options: OPTIONS }, async ($, on) => {
   world(on, { today: waitingT2() })
   await $.session.start(START)
-  expect(await text(await $.ui.mount({ ...band(120), surface: 'desktop' }))).toContain('waiting: T2 since 09:30')
+  expect(await text(await $.ui.mount({ ...band(120), surface: 'desktop' }))).toContain('T2 Read section 3 · waiting since 09:30 [Done]')
   const narrow = await text(await $.ui.mount({ ...band(56), surface: 'terminal' }))
-  expect(narrow).toContain('wait T2')
+  expect(narrow).toContain('T2 Read section 3 · waiting')
   expect(narrow).not.toContain('since')
 })
 

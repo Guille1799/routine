@@ -21,6 +21,7 @@ import {
   inboxText,
   localDate,
   missingFields,
+  ownTask,
   planDayContext,
   promptContext,
   readWriterAnswer,
@@ -140,13 +141,7 @@ async function draftNote($: $, prompt: string): Promise<void> {
 }
 
 /** Pause stops the task at the click (D56); the band then asks only why. */
-async function pauseNow($: $): Promise<void> {
-  const r = await readToday($)
-  if (!r.today?.active) {
-    $.ui.toast(r.problem ?? 'No active task.')
-    return
-  }
-  const task = r.today.active
+async function pauseNow($: $, task: string): Promise<void> {
   const out = await write($, { action: 'pause', task })
   if (!out.ok) {
     $.ui.toast(`Pause: ${out.error}`)
@@ -160,19 +155,14 @@ async function setReason($: $, task: string, reason: string): Promise<void> {
   return closeOrShow($, out) // the pick closes the row: back to the line, where Resume is
 }
 
-async function openForm($: $, kind: 'done'): Promise<void> {
-  const r = await readToday($)
-  if (!r.today?.active) {
-    $.ui.toast(r.problem ?? 'No active task.')
-    return
-  }
+async function openForm($: $, task: string): Promise<void> {
   const fields = await doneFields($)
   if (typeof fields === 'string') {
     $.ui.toast(fields)
     return
   }
   const needsDraft = fields.some(f => f.kind === 'text' && f.prefill === 'session')
-  await update($, form, () => ({ kind, task: r.today.active!, values: {}, draft: needsDraft ? null : '', error: null }))
+  await update($, form, () => ({ kind: 'done' as const, task, values: {}, draft: needsDraft ? null : '', error: null }))
   if (needsDraft) await draftNote($, DONE_DRAFT_PROMPT)
 }
 
@@ -314,7 +304,7 @@ async function idleCheck($: $): Promise<void> {
   if (!(await isInteractive($))) return
   const r = await readToday($)
   const minutes = r.today?.active ? await idleMinutes($) : 0
-  const due = idleDue(r.today, lastAnswerAt, minutes, await $.clock.now())
+  const due = idleDue(r.today, lastAnswerAt, minutes, await $.clock.now(), await $.session.id())
   if (due.kind === 'wait') {
     idleTimer = $.clock.after(due.ms, () => void idleCheck($))
   } else if (due.kind === 'pause') {
@@ -494,7 +484,7 @@ export const register: Register = (on, options) => {
       added.push(ask)
       await update($, dayAsked, () => date)
     }
-    const context = r.today ? promptContext(r.today, TOOL) : undefined
+    const context = r.today ? promptContext(r.today, TOOL, await $.session.id()) : undefined
     if (context) added.push(context)
     return added.length ? next({ ...e, context: [...(e.context ?? []), ...added] }) : next(e)
   }).catch(($, e, next) => next(e)) // a broken read never blocks the prompt
@@ -507,13 +497,15 @@ export const register: Register = (on, options) => {
     }
     if (!e.usage || !(await isInteractive($))) return res
     const r = await readToday($)
-    if (!r.today?.active) return res
+    const own = r.today ? ownTask(r.today, await $.session.id()) : undefined
+    const status = own ? r.today?.tasks[own]?.status : undefined
+    if (!own || (status !== 'active' && status !== 'waiting')) return res // tokens count for this session's task (D39, D64)
     const { input_tokens, output_tokens, cache_read_input_tokens, cache_creation_input_tokens, model } = e.usage
     const data: Record<string, unknown> = {
       input_tokens, output_tokens, cache_read_input_tokens, cache_creation_input_tokens, model,
     }
     if (e.agentId) data.agent = e.agentId
-    await write($, { action: 'usage', task: r.today.active, data })
+    await write($, { action: 'usage', task: own, data })
     return res
   })
 
@@ -526,7 +518,9 @@ export const register: Register = (on, options) => {
     const today = r.today
     if (action === 'status') return { result: taskList(today) || 'No tasks today.' }
     const said = s('task')
-    const task = resolveTask(today, said)
+    const here = ownTask(today, await $.session.id())
+    // A task named ("T2") is that task; unnamed, it is this session's (D64), never another session's.
+    const task = said ? resolveTask(today, said) : here
     const done = (out: WriterOutcome, ok: string) => (out.ok ? { result: ok } : { deny: `routine refused: ${out.error}` })
 
     switch (action) {
@@ -544,18 +538,18 @@ export const register: Register = (on, options) => {
         ].filter(Boolean).join('\n'))
       }
       case 'pause': {
-        if (!task) return { deny: 'routine: no active task to pause' }
+        if (!task) return { deny: 'routine: no task in this session to pause' }
         const note = s('note')?.trim()
         if (!note) return { deny: 'routine: a pause needs a note: what was done, where it stopped, the next step' }
         return done(await write($, { action: 'pause', task, data: { note } }), `Paused ${aliasOf(today, task)}.`)
       }
       case 'wait': {
-        // D62: a session works on it alone; the writer accepts it from active or paused.
+        // D62/D64: a session works on it alone; from pending it starts here as a side task.
         if (!task) return { deny: 'routine: which task waits? Name it, e.g. T2' }
         return done(await write($, { action: 'wait', task }), `${aliasOf(today, task)} is waiting: the active slot is free.`)
       }
       case 'done': {
-        if (!task) return { deny: 'routine: no active task to finish' }
+        if (!task) return { deny: 'routine: no task in this session to finish; name it, e.g. T2' }
         const fields = await doneFields($)
         if (typeof fields === 'string') return { deny: `routine: ${fields}` }
         const given = (typeof input.fields === 'object' && input.fields) ? { ...(input.fields as Record<string, unknown>) } : {}
@@ -585,17 +579,17 @@ export const register: Register = (on, options) => {
         return done(await write($, { action: 'task_edit', task, data: { changes } }), `Edited ${aliasOf(today, task)}: ${Object.keys(changes).join(', ')}.`)
       }
       case 'drift_warn': {
-        if (!today.active) return { deny: 'routine: no active task, so nothing to drift from' }
+        if (!here) return { deny: 'routine: no task in this session, so nothing to drift from' }
         const message = s('message')?.trim()
         if (!message) return { deny: 'routine: drift_warn needs message' }
-        return done(await write($, { action: 'drift_warn', task: today.active, data: { message } }), 'Drift warning logged. Ask: back to the task, or continue and why?')
+        return done(await write($, { action: 'drift_warn', task: here, data: { message } }), 'Drift warning logged. Ask: back to the task, or continue and why?')
       }
       case 'drift_reply': {
-        if (!today.active) return { deny: 'routine: no active task' }
+        if (!here) return { deny: 'routine: no task in this session' }
         const reply = s('reply')
         const data: Record<string, unknown> = { action: reply }
         if (s('why')) data.why = s('why')
-        return done(await write($, { action: 'drift_reply', task: today.active, data }), reply === 'back' ? 'Back to the task.' : 'Logged: continuing, with the reason.')
+        return done(await write($, { action: 'drift_reply', task: here, data }), reply === 'back' ? 'Back to the task.' : 'Logged: continuing, with the reason.')
       }
       case 'inbox': {
         const text = s('text')?.trim()
@@ -624,7 +618,8 @@ export const register: Register = (on, options) => {
       )
     }
     const now = await $.clock.now()
-    const b = band(r.today, now)
+    const session = await $.session.id()
+    const b = band(r.today, now, session)
     const f = await read($, form)
     const picking = await read($, breakPick)
     const asOf = <Text dimColor> · data {b.asOf}</Text>
@@ -676,21 +671,20 @@ export const register: Register = (on, options) => {
               <Text bold wrap="truncate-end">{b.task.alias} {b.task.title}</Text>
               {b.task.elapsed ? <Text bold>{b.task.elapsed}</Text> : null}
             </Box>
+          ) : b.waiting ? (
+            <Text wrap="truncate-end">{fit.date ? `${b.waiting.alias} ${b.waiting.title} · waiting since ${b.waiting.since}` : `${b.waiting.alias} ${b.waiting.title} · waiting`}</Text>
           ) : b.resume ? (
             <Text dimColor wrap="truncate-end">{b.resume.alias} {b.resume.title} · paused</Text>
           ) : (
-            <Text dimColor>no active task</Text>
+            <Text dimColor>{fit.recap ? "no task in this session · say 'let's do T#'" : 'no task here'}</Text>
           )}
           {b.resume && <Button key="resume" label="Resume" hotkey="s" variant="primary" onPress={() => startTask($, b.resume!.id)} />}
-          {b.task && <Button key="pause" label="Pause" hotkey="p" onPress={() => pauseNow($)} />}
-          {b.task && <Button key="done" label="Done" hotkey="d" onPress={() => openForm($, 'done')} />}
-          {b.task && fit.recap && <Button key="wait" label="Wait" hotkey="w" onPress={() => waitTask($, r.today!.active!)} />}
-          {b.waiting.length > 0 && (
-            <Text dimColor>
-              {fit.date
-                ? `waiting: ${b.waiting.map(x => `${x.alias} since ${x.since}`).join(', ')}`
-                : `wait ${b.waiting.map(x => x.alias).join(' ')}`}
-            </Text>
+          {b.task && <Button key="pause" label="Pause" hotkey="p" onPress={() => pauseNow($, b.task!.id)} />}
+          {b.task && <Button key="done" label="Done" hotkey="d" onPress={() => openForm($, b.task!.id)} />}
+          {b.waiting && <Button key="done" label="Done" hotkey="d" onPress={() => openForm($, b.waiting!.id)} />}
+          {b.task && fit.recap && <Button key="wait" label="Wait" hotkey="w" onPress={() => waitTask($, b.task!.id)} />}
+          {b.elsewhere && fit.recap && (
+            <Text dimColor wrap="truncate-end">{fit.date ? `now: ${b.elsewhere.alias} ${b.elsewhere.title} elsewhere` : `now: ${b.elsewhere.alias} elsewhere`}</Text>
           )}
           {(fit.break === 'always' || due) && (
             <Button
@@ -729,6 +723,7 @@ export const register: Register = (on, options) => {
     // Asking the reason needs a text field, which every surface but the phone has.
     const Input = e.surface === 'mobile' ? undefined : $.ui.resolve(e).Input
     const asking = await read($, reopening)
+    const session = await $.session.id()
     const ed = await read($, editing)
     const r = await readToday($)
     if (!r.today) return <Box key="tasks"><Text dimColor>{r.problem}</Text></Box>
@@ -746,12 +741,12 @@ export const register: Register = (on, options) => {
         {rows.map(row => (
           <Box key={`task-${row.id}`} flexDirection="column">
             <Box key={`head-${row.id}`}>
-              <Text bold={row.action === 'done'}>{row.mark} {row.alias} {row.priority ? '★ ' : ''}{row.title}{row.carried ? ` · carried ${row.carried}x` : ''} </Text>
+              <Text bold={row.action === 'done'}>{row.mark} {row.alias} {row.priority ? '★ ' : ''}{row.title}{row.carried ? ` · carried ${row.carried}x` : ''}{today.tasks[row.id]?.session === session && row.action !== 'reopen' ? ' · here' : ''} </Text>
               {row.action === 'start' && today.open && (
                 <Button key={`start-${row.id}`} label="Start" onPress={() => startTask($, row.id)} />
               )}
               {row.action === 'done' && (
-                <Button key={`done-${row.id}`} label="Done" variant="primary" onPress={() => openForm($, 'done')} />
+                <Button key={`done-${row.id}`} label="Done" variant="primary" onPress={() => openForm($, row.id)} />
               )}
               {row.canWait && <Button key={`wait-${row.id}`} label="Wait" onPress={() => waitTask($, row.id)} />}
               {row.action !== 'reopen' && Input && ed?.task !== row.id && (

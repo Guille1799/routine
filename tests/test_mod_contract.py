@@ -21,7 +21,7 @@ from routine import state
 REPO = Path(__file__).resolve().parent.parent
 CONTRACT = REPO / "mod" / "hooks" / "contract.ts"
 # The order a day would see them in; every contract entry must appear here.
-SCENARIO = ["task_edit", "start", "drift_warn", "drift_reply", "inbox", "said", "break_start", "break_end",
+SCENARIO = ["task_edit", "wait", "start", "drift_warn", "drift_reply", "inbox", "said", "break_start", "break_end",
             "usage", "pause", "start", "pause_click", "pause_reason", "checkpoint", "start", "pause_idle", "start", "wait", "start", "done",
             "reopen"]
 
@@ -68,10 +68,12 @@ def test_r16_every_call_the_mod_makes_is_written_by_the_real_writer(data):
     assert added.returncode == 0, added.stdout
     task = json.loads(added.stdout)["events"][0]["task"]
 
-    for name in SCENARIO:
+    for n, name in enumerate(SCENARIO):
         done = run(argv(calls[name], task), data)
         assert done.returncode == 0, f"{name}: {done.stdout} {done.stderr}"
         st = state.current(data)
+        if name == "wait" and n == 1:  # a side task started from pending in its session (D64)
+            assert st["tasks"][task]["status"] == "waiting" and st["tasks"][task]["session"] == "session-1"
         if name == "start":  # the band's elapsed time reads it (R17)
             assert st["tasks"][task]["since"] == json.loads(done.stdout)["events"][-1]["ts"]
         if name == "usage":  # the per-task total (R27)

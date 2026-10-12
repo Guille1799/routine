@@ -53,7 +53,7 @@ test('R17: the band re-reads today.json on every draw', { options: OPTIONS }, as
   w.today = today({ active: null, last_ts: '2026-10-12T09:45:00+02:00' })
   await ui.redraw()
   const line = await text(ui)
-  expect(line).toContain('no active task')
+  expect(line).toContain('T2 Read section 3 · paused') // its own task, as it is now
   expect(line).toContain('data 09:45')
 })
 
