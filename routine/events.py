@@ -54,7 +54,8 @@ SYSTEM_PAUSE_REASONS = ("idle",)
 PRIVATE_SAID_KINDS = {"drift_reply", "mode", "attention"}
 
 TASK_FIELDS_REQUIRED_TO_START = ("done_when", "first_step", "perimeter")
-EDITABLE_CARD_FIELDS = ("title", "done_when", "first_step", "perimeter", "kind", "project", "priority")
+EDITABLE_CARD_FIELDS = ("title", "done_when", "first_step", "perimeter", "kind", "project", "priority",
+                        "technique")  # technique: the work/break rhythm chosen for the task (D67)
 
 _DAY = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
