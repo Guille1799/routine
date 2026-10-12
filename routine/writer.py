@@ -162,6 +162,10 @@ def record(root: Path, etype: str, data: dict | None = None, task: str | None = 
                 raise RuleError(f"{task} is {status}: finished tasks are final; reopen it first")
             if etype == "reopen" and status not in FINAL:
                 raise RuleError(f"only a done or dropped task can be reopened: {task} is {status}")
+            if etype in ("pause", "done", "drop", "wait") and (st["drift"].get(task) or {}).get("open"):
+                # the warning closes as unanswered: that is data too (D65)
+                written.append(_event("drift_reply", today, {"action": "unanswered"},
+                                      task=task, session=session, cwd=cwd))
             if etype == "done" and status == "pending":  # done outside the routine (D57)
                 data["unstarted"] = True
             if etype == "start":
@@ -196,6 +200,25 @@ def record(root: Path, etype: str, data: dict | None = None, task: str | None = 
                     raise RuleError("the user already justified staying on this; no new warning")
             if etype == "drift_reply" and not (st["drift"].get(task) or {}).get("open"):
                 raise RuleError("there is no open drift warning to answer")
+            if etype == "start" and st["break"]:  # starting work ends the break (D66)
+                written.append(_event("break_end", today, {"auto": "task started"},
+                                      session=session, cwd=cwd))
+            if etype == "close_day":  # nothing stays running overnight (D66)
+                if st["active"]:
+                    written.append(_event("pause", today, {"note": "auto-paused: day closed"},
+                                          task=st["active"], session=session, cwd=cwd))
+                if st["break"]:
+                    written.append(_event("break_end", today, {"auto": "day closed"},
+                                          session=session, cwd=cwd))
+            wants_priority = ((etype == "task_add" and data.get("priority") is True) or
+                              (etype == "task_edit" and data.get("changes", {}).get("priority") is True))
+            if wants_priority:  # one priority a day: the new one replaces the old (D66)
+                for other_id, other in st["tasks"].items():
+                    if other_id != task and other.get("priority") is True and other["status"] not in FINAL:
+                        written.append(_event("task_edit", today,
+                                              {"changes": {"priority": False},
+                                               "note": f"replaced by {task}"},
+                                              task=other_id, session=session, cwd=cwd))
             if etype == "inbox" and "id" not in data:
                 data["id"] = f"i-{secrets.token_hex(4)}"
             if etype == "inbox_sorted" and data.get("item") not in st["inbox"]:

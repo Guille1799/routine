@@ -372,3 +372,65 @@ def test_r40_tasks_remember_the_session_that_works_on_them(root):
     incomplete = add(root, title="x", perimeter="")
     with pytest.raises(writer.RuleError):
         writer.record(root, "wait", task=incomplete, session="s-other")
+
+
+def test_r43_ending_a_task_with_an_open_drift_warning_closes_it_as_unanswered(root):
+    writer.record(root, "open_day", {"mode": "normal"}, day="2026-10-12")
+    t = add(root)
+    writer.record(root, "start", task=t)
+    writer.record(root, "drift_warn", {"message": "about another project"}, task=t)
+    written = writer.record(root, "done", {"fields": {}}, task=t)
+    assert [e["type"] for e in written] == ["drift_reply", "done"]
+    dr = state.current(root)["drift"][t]
+    assert dr["open"] is False and dr["replies"][-1]["action"] == "unanswered"
+
+
+# The full table of a task's states x buttons (T9). Each cell: the status after the button,
+# or None when the writer must refuse. This table IS the specification; change both together.
+MATRIX = {
+    #            start      pause     wait       done    drop       reopen
+    "pending":  ("active", None,     "waiting", "done", "dropped", None),
+    "active":   ("active", "paused", "waiting", "done", "dropped", None),
+    "paused":   ("active", None,     "waiting", "done", "dropped", None),
+    "waiting":  ("active", None,     None,      "done", "dropped", None),
+    "done":     (None,     None,     None,      None,   None,      "pending"),
+    "dropped":  (None,     None,     None,      None,   None,      "pending"),
+}
+BUTTONS = {"start": {}, "pause": {}, "wait": {}, "done": {"fields": {}}, "drop": {},
+           "reopen": {"why": "test"}}
+REACH = {"pending": [], "active": ["start"], "paused": ["start", "pause"],
+         "waiting": ["start", "wait"], "done": ["start", "done"], "dropped": ["drop"]}
+
+
+@pytest.mark.parametrize("status", list(MATRIX))
+def test_r44_every_cell_of_the_state_table(tmp_path, monkeypatch, status):
+    for button, expected in zip(BUTTONS, MATRIX[status]):
+        root = tmp_path / f"{status}-{button}"
+        root.mkdir()
+        monkeypatch.setenv("ROUTINE_DATA_DIR", str(root))
+        writer.record(root, "open_day", {"mode": "normal"}, day="2026-10-12")
+        t = add(root)
+        for step in REACH[status]:
+            writer.record(root, step, BUTTONS[step], task=t)
+        assert state.current(root)["tasks"][t]["status"] == status
+        if expected is None:
+            with pytest.raises((writer.RuleError, events.EventError)):
+                writer.record(root, button, BUTTONS[button], task=t)
+        else:
+            writer.record(root, button, BUTTONS[button], task=t)
+            assert state.current(root)["tasks"][t]["status"] == expected, (status, button)
+
+
+def test_r45_surrounding_conditions(root):
+    writer.record(root, "open_day", {"mode": "normal"}, day="2026-10-12")
+    a, b = add(root, priority=True), add(root, title="b")
+    writer.record(root, "break_start", {"technique": "pomodoro"})       # a break with no task (D66)
+    writer.record(root, "start", task=a)                                 # starting ends the break
+    assert state.current(root)["break"] is None
+    writer.record(root, "task_edit", {"changes": {"priority": True}}, task=b)
+    st = state.current(root)
+    assert st["tasks"][b]["priority"] is True and st["tasks"][a]["priority"] is False
+    writer.record(root, "break_start", {"technique": "pomodoro"})
+    writer.record(root, "close_day")                                     # nothing runs overnight
+    st = state.current(root)
+    assert st["tasks"][a]["status"] == "paused" and st["break"] is None
