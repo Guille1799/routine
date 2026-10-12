@@ -154,7 +154,7 @@ def record(root: Path, etype: str, data: dict | None = None, task: str | None = 
                 if task in st["tasks"]:
                     raise RuleError(f"task {task} already exists today")
             elif etype in ("start", "pause", "pause_reason", "checkpoint", "done", "drop",
-                           "reopen", "drift_warn", "drift_reply"):
+                           "reopen", "task_edit", "drift_warn", "drift_reply"):
                 if task not in st["tasks"]:
                     raise RuleError(f"unknown task for today: {task}")
             status = st["tasks"][task]["status"] if task in st["tasks"] else None

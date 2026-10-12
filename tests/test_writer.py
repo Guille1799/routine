@@ -306,3 +306,22 @@ def test_d57_done_without_start_is_accepted_and_marked(root):
     t2 = add(root, title="started")
     writer.record(root, "start", task=t2)
     assert "unstarted" not in writer.record(root, "done", {"fields": {}}, task=t2)[-1]["data"]
+
+
+def test_r37_task_card_can_be_edited_but_not_emptied(root):
+    writer.record(root, "open_day", {"mode": "normal"}, day="2026-10-12")
+    t = add(root, priority=True)
+    writer.record(root, "task_edit", {"changes": {"priority": False, "title": "renamed"}}, task=t)
+    card = state.current(root)["tasks"][t]
+    assert card["priority"] is False and card["title"] == "renamed"
+    for bad in ({"perimeter": ""}, {"status": "done"}, {}):
+        with pytest.raises(events.EventError):
+            writer.record(root, "task_edit", {"changes": bad}, task=t)
+
+
+def test_d59_idle_is_a_valid_pause_reason(root):
+    writer.record(root, "open_day", {"mode": "normal"}, day="2026-10-12")
+    t = add(root)
+    writer.record(root, "start", task=t)
+    writer.record(root, "pause", {"reason": "idle"}, task=t)
+    assert state.current(root)["tasks"][t]["status"] == "paused"

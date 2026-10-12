@@ -23,6 +23,7 @@ SCHEMA_VERSION = 1
 TYPES: dict[str, tuple[tuple[str, ...], bool]] = {
     "open_day": (("mode",), False),        # mode: full | normal | light | bad, plus hours
     "task_add": (("title",), True),        # the task card: title, done_when, first_step, perimeter, kind, project
+    "task_edit": (("changes",), True),     # change card fields of an existing task (e.g. unset priority)
     "carry": (("carried",), True),         # an unfinished task moved into a new day
     "start": ((), True),
     "pause": ((), True),                   # at the click (D56); reason, and a note when said from chat
@@ -44,12 +45,14 @@ TYPES: dict[str, tuple[tuple[str, ...], bool]] = {
 
 # Why a pause happened, from buttons only so they can be counted (D56). No reason is
 # stored as no reason: "other" is the user's pick, never a default.
-PAUSE_REASONS = ("planned", "interrupted", "blocked", "switched", "low energy", "lost focus", "other")
+PAUSE_REASONS = ("planned", "interrupted", "blocked", "switched", "low energy", "lost focus", "other",
+                 "idle")  # idle: set only by the automatic pause (D59), never offered as a button
 
 # Kinds that describe the user's attention never become reusable "said" text (D44).
 PRIVATE_SAID_KINDS = {"drift_reply", "mode", "attention"}
 
 TASK_FIELDS_REQUIRED_TO_START = ("done_when", "first_step", "perimeter")
+EDITABLE_CARD_FIELDS = ("title", "done_when", "first_step", "perimeter", "kind", "project", "priority")
 
 _DAY = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
@@ -87,6 +90,15 @@ def validate(event: dict) -> dict:
         raise EventError("attention data is never stored as reusable text")
     if etype in ("pause", "pause_reason") and "reason" in data and data["reason"] not in PAUSE_REASONS:
         raise EventError(f"unknown pause reason: {data['reason']!r}")
+    if etype == "task_edit":
+        changes = data.get("changes")
+        if not isinstance(changes, dict) or not changes:
+            raise EventError("task_edit needs a non-empty changes object")
+        unknown = [k for k in changes if k not in EDITABLE_CARD_FIELDS]
+        if unknown:
+            raise EventError(f"these card fields cannot be edited: {', '.join(unknown)}")
+        if any(k in TASK_FIELDS_REQUIRED_TO_START and not str(v).strip() for k, v in changes.items()):
+            raise EventError("done_when, first_step and perimeter cannot be emptied")
     if etype == "checkpoint" and not str(data.get("note", "")).strip():
         raise EventError("a checkpoint needs a note")
     if etype == "drift_reply" and data.get("action") not in ("back", "continue"):

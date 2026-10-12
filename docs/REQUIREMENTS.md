@@ -46,6 +46,8 @@ piece that owns it is being built.
 | R35 | Finished tasks are final until reopened with a reason; done without start is marked | D57 | tests/test_writer.py::test_d57_finished_tasks_are_final_until_reopened |
 | R34 | Pause is written at the click; its reason comes from buttons only, starts as none and changes only while the pause lasts; leaving saves the context as its own step | D56 | tests/test_writer.py::test_r34_pause_stops_at_the_click_and_the_reason_is_set_while_it_lasts |
 | R36 | The first prompt of the day asks whether to start the day, once per session per day | D58 | pending: P3 |
+| R37 | Task cards can be edited, never emptied of their start fields | D61 | tests/test_writer.py::test_r37_task_card_can_be_edited_but_not_emptied |
+| R38 | Automatic pause after idle minutes, configurable, reason idle | D59 | pending: P3 |
 
 ## Decisions without a requirement
 
@@ -61,6 +63,7 @@ piece that owns it is being built.
 - D48: proposed, not decided.
 - D49: a user habit, not system behaviour.
 - D53: a process decision (go-ahead to build).
+- D60: a process decision (how task sessions are launched).
 - D55: a principle that judges every visible change, not one behaviour.
 
 ## Pieces

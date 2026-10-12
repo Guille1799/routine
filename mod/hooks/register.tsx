@@ -41,9 +41,6 @@ const reopening = atom({ plugin: 'routine', key: 'reopen' } as const, null)
 const RECAP_PROMPT =
   'Recap for the user coming back: in at most three short lines, where we were in this session ' +
   'and the next concrete step. Reply with the recap only.'
-const PAUSE_DRAFT_PROMPT =
-  'Draft the context to resume the routine task in this session from another session, at most three ' +
-  'short lines: what was done, where it stopped, the next step. Reply with the context only.'
 const DONE_DRAFT_PROMPT =
   'Draft the closing note for the routine task in this session, at most four short lines: ' +
   'done / stopped at / next / what I take away. Reply with the note only.'
@@ -133,7 +130,7 @@ async function draftNote($: $, prompt: string): Promise<void> {
   await update($, form, f => (f ? { ...f, draft: text } : f))
 }
 
-/** Pause stops the task at the click (D56); the reason and the context to leave come after. */
+/** Pause stops the task at the click (D56); the band then asks only why. */
 async function pauseNow($: $): Promise<void> {
   const r = await readToday($)
   if (!r.today?.active) {
@@ -146,13 +143,12 @@ async function pauseNow($: $): Promise<void> {
     $.ui.toast(`Pause: ${out.error}`)
     return
   }
-  await update($, form, () => ({ kind: 'pause' as const, task, values: {}, draft: null, error: null }))
-  await draftNote($, PAUSE_DRAFT_PROMPT)
+  await update($, form, () => ({ kind: 'pause' as const, task, values: {}, draft: '', error: null }))
 }
 
 async function setReason($: $, task: string, reason: string): Promise<void> {
   const out = await write($, { action: 'pause_reason', task, data: { reason } })
-  if (!out.ok) await update($, form, x => (x ? { ...x, error: out.error } : x))
+  return closeOrShow($, out) // the pick closes the row: back to the line, where Resume is
 }
 
 async function openForm($: $, kind: 'done'): Promise<void> {
@@ -174,15 +170,7 @@ async function openForm($: $, kind: 'done'): Promise<void> {
 async function saveForm($: $): Promise<void> {
   const f = await read($, form)
   if (!f) return
-  if (f.kind === 'pause') {
-    const note = String(f.values.note ?? f.draft ?? '').trim()
-    if (!note) {
-      await update($, form, x => (x ? { ...x, error: 'Write the context first.' } : x))
-      return
-    }
-    const out = await write($, { action: 'checkpoint', task: f.task, data: { note } })
-    return closeOrShow($, out)
-  }
+  if (f.kind === 'pause') return // a pause saves nothing more than its reason
   const fields = await doneFields($)
   if (typeof fields === 'string') {
     await update($, form, x => (x ? { ...x, error: fields } : x))
@@ -344,9 +332,9 @@ async function formRows($: $, f: RoutineForm, el: BandElements, openPause: strin
   )
   if (f.kind === 'pause') {
     if (openPause === undefined) return [] // resumed, here or elsewhere: nothing left to ask
-    // D56: the task already stopped at the click. Each pick is written at once and
-    // replaces the previous one; with no pick the pause keeps no reason.
-    rows.push(
+    // D56: the task already stopped at the click. A pick is written at once and closes
+    // the row; with no pick the pause keeps no reason, and Resume ends it as it is.
+    return [
       <Box key="row-reason">
         <Text>Why? </Text>
         {PAUSE_REASONS.map((r, n) => (
@@ -357,9 +345,9 @@ async function formRows($: $, f: RoutineForm, el: BandElements, openPause: strin
             onPress={() => setReason($, f.task, r)}
           />
         ))}
+        {f.error ? <Text color="red"> {f.error}</Text> : null}
       </Box>,
-    )
-    rows.push(noteInput('note', 'Context to resume'))
+    ]
   } else {
     const fields = await doneFields($)
     if (typeof fields === 'string') {
@@ -390,8 +378,8 @@ async function formRows($: $, f: RoutineForm, el: BandElements, openPause: strin
   }
   rows.push(
     <Box key="form-actions">
-      <Button key="save" label={f.kind === 'done' ? 'Save done' : 'Leave · save context'} variant="primary" onPress={() => saveForm($)} />
-      <Button key="cancel" label={f.kind === 'done' ? 'Cancel' : 'Close'} onPress={() => update($, form, () => null)} />
+      <Button key="save" label="Save done" variant="primary" onPress={() => saveForm($)} />
+      <Button key="cancel" label="Cancel" onPress={() => update($, form, () => null)} />
       {f.error ? <Text color="red"> {f.error}</Text> : null}
     </Box>,
   )

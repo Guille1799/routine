@@ -194,3 +194,6 @@ not decided (D48).
 | D56 | current, partly open | pause stops at the click; the reason is picked from buttons only, starts as none and can change while the pause lasts; a separate "Leave · save context" writes the drafted checkpoint note |
 | D57 | current | finished (done or dropped) is final: start, done and drop are refused; only reopen, with a reason, brings a task back. Done without start is accepted and marked unstarted |
 | D58 | current | the first prompt of the day asks whether to start the day with /plan-day, once per session per day |
+| D59 | current | automatic pause after N idle minutes counted from the end of the session's last answer; configurable; reason idle |
+| D60 | process | new tasks are launched as sessions by the lead session when the user asks |
+| D61 | current | a task card can be edited (title, done when, first step, perimeter, kind, project, priority) but its three start fields cannot be emptied |
