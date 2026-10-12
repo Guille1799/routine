@@ -16,7 +16,7 @@ from datetime import datetime
 from pathlib import Path
 
 from . import events as ev
-from . import paths, state
+from . import library, paths, state
 
 LOCK_TIMEOUT_S = 10.0
 
@@ -223,9 +223,20 @@ def record(root: Path, etype: str, data: dict | None = None, task: str | None = 
                 data["id"] = f"i-{secrets.token_hex(4)}"
             if etype == "inbox_sorted" and data.get("item") not in st["inbox"]:
                 raise RuleError(f"unknown inbox item: {data.get('item')}")
+            if etype in ("held_sorted", "library_touch", "library_decide"):
+                places = library.current(root)
+                where = "holding" if etype == "held_sorted" else "library"
+                if data.get("item") not in places[where]:
+                    raise RuleError(f"unknown {where} item: {data.get('item')}")
+                if etype == "held_sorted" and data.get("to") == "holding":
+                    raise RuleError(f"{data.get('item')} is already in the holding list")
+            if etype == "exception" and str(data.get("for")) > today:
+                raise RuleError("an exception is written for today or a past day, never ahead")
             written.append(_event(etype, today, data, task=task, session=session, cwd=cwd))
         _append(root, written)
         state.write_snapshot(root, state.current(root))
+        if any(e["type"] in library.CHANGES_VIEWS for e in written):
+            library.write_views(root)
         return written
 
 

@@ -30,17 +30,17 @@ piece that owns it is being built.
 | R18 | Drift is warned once per episode; continuing requires a reason; both are logged | D9, D37, D54 | tests/test_writer.py::test_r18_continuing_after_a_drift_warning_needs_a_reason |
 | R19 | Done is one step with the configured fields; missing required fields are asked | D14, D17, D42, D43, D51, D23 | tests/test_mod.py::test_r19_done_in_one_step_missing_fields_asked |
 | R20 | `/inbox <text>` captures without leaving the task | D26 | tests/test_mod.py::test_r20_inbox_without_a_model_turn |
-| R21 | The close sends tasks through each project's entry command; projects without one go to the holding list | D27, D34 | pending: P4 |
-| R22 | Close-time sorting applies the purpose rule (task vs content), one place per item | D32 | pending: P4 |
-| R23 | Library items untouched for 5 weeks ask for a decision, one per close | D33 | pending: P4 |
+| R21 | The close sends tasks through each project's entry command; projects without one go to the holding list | D27, D34 | tests/test_close.py::test_r21_sorting_runs_the_entry_command_or_holds_the_item |
+| R22 | Close-time sorting applies the purpose rule (task vs content), one place per item | D32 | tests/test_close.py::test_r22_purpose_makes_a_task_otherwise_content_one_place_per_item |
+| R23 | Library items untouched for 5 weeks ask for a decision, one per close | D33 | tests/test_close.py::test_r23_library_items_expire_after_five_weeks_one_offer_per_close |
 | R24 | Two old items a day are offered in the sheet | D31 | tests/test_inventory.py::test_r24_two_old_items_are_offered_and_rotate |
 | R25 | Breaks: technique and phone check logged; timer survives a reload | D50, D22 | tests/test_mod.py::test_r25_breaks_logged_and_timer_survives_reload |
 | R26 | Recap on demand and after a pause | D8 | tests/test_mod.py::test_r26_recap_on_demand_and_after_a_break |
 | R27 | Token usage logged per turn with an active task; total per task in the view | D39 | tests/test_mod.py::test_r27_usage_logged_per_turn_with_active_task |
 | R28 | Focus data is never stored as reusable text | D44 | tests/test_writer.py::test_r28_attention_data_never_becomes_reusable_text |
-| R29 | Fulfilled-day rate computed as priority done + day closed, over counted days | D41, D7 | pending: P4 |
+| R29 | Fulfilled-day rate computed as priority done + day closed, over counted days | D41, D7 | tests/test_close.py::test_r29_fulfilled_day_rate_over_counted_days |
 | R30 | A missing data folder fails loudly with its own exit code | D46 | tests/test_writer.py::test_r30_missing_data_dir_fails_loudly |
-| R31 | Install and uninstall with demo data, leaving nothing behind | D45 | pending: P4 |
+| R31 | Install and uninstall with demo data, leaving nothing behind | D45 | tests/test_install.py::test_r31_install_a_demo_and_uninstall_it_leaving_nothing_behind |
 | R32 | The done fields are read from the user's config, not the code | D52 | tests/test_writer.py::test_r32_done_fields_come_from_the_user_config |
 | R33 | The writer CLI has stable exit codes: 0 written, 1 refused, 2 no data folder | D35, D46 | tests/test_writer.py::test_cli_exit_codes |
 | R35 | Finished tasks are final until reopened with a reason; done without start is marked | D57 | tests/test_writer.py::test_d57_finished_tasks_are_final_until_reopened |
@@ -51,11 +51,12 @@ piece that owns it is being built.
 | R39 | A task can wait (paused that moves on), freeing the active slot | D62 | tests/test_writer.py::test_r39_waiting_is_paused_that_moves_on_and_frees_the_active_slot |
 | R40 | Each task remembers its session; a side task can start straight as waiting | D64 | tests/test_writer.py::test_r40_tasks_remember_the_session_that_works_on_them |
 | R41 | A session's band shows its own task, and the day's active task dimmed when elsewhere | D64 | pending: P3 |
-| R42 | A dropped priority with a reason makes the day a justified exception | D63 | pending: P4 |
+| R42 | A dropped priority with a reason makes the day a justified exception | D63 | tests/test_close.py::test_r42_a_priority_dropped_for_a_reason_is_a_justified_exception |
 | R43 | Ending or pausing a task with an open drift warning closes it as unanswered | D65 | tests/test_writer.py::test_r43_ending_a_task_with_an_open_drift_warning_closes_it_as_unanswered |
 | R44 | Every cell of the state table (6 states x 6 buttons) behaves as specified | D57, D62, D10 | tests/test_writer.py::test_r44_every_cell_of_the_state_table |
 | R45 | Surrounding conditions: break with no task, start ends a break, close pauses and ends breaks, one priority | D66 | tests/test_writer.py::test_r45_surrounding_conditions |
 | R46 | The band names the technique and shows work and break phases with their minutes | D67, D68 | tests/test_mod.py::test_r46_the_band_shows_the_work_and_break_rhythm |
+| R47 | Closing the day commits diary/ and state/ in the data folder's git repository, never config; without one it says it skipped | D69 | tests/test_close.py::test_d69_the_close_commits_diary_and_state_only |
 
 ## Decisions without a requirement
 

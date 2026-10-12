@@ -17,7 +17,8 @@ the CLI through the environment.
 ├── diary/       YYYY-MM/YYYY-MM-DD.jsonl   (events, append-only)
 ├── state/       today.json (read model) · .writer.lock
 ├── inventory/   YYYY-MM-DD.json            (written by the Windows task, P2)
-├── library/     to_read · to_watch · open_topics · ideas      (P4)
+├── library/     to_read.md · to_watch.md · open_topics.md · ideas.md   (views, P4)
+├── holding/     holding.md                 (view: items whose project has no entry command, P4)
 └── learning/    learned.jsonl · said.jsonl                    (P4)
 ```
 
@@ -25,8 +26,16 @@ the CLI through the environment.
 
 Defined in `routine/events.py` (the code is the contract; this is a summary).
 `{"v":1, "ts":ISO-with-offset, "day":"YYYY-MM-DD", "type":..., "task"?, "session"?, "cwd"?, "data":{...}}`.
-Types: `open_day, task_add, carry, start, pause, done, drop, inbox, inbox_sorted, said,
-drift_warn, drift_reply, break_start, break_end, usage, close_day`.
+Types: `open_day, task_add, task_edit, carry, start, pause, pause_reason, checkpoint, done,
+drop, wait, reopen, inbox, inbox_sorted, held_sorted, library_touch, library_decide, said,
+exception, drift_warn, drift_reply, break_start, break_end, usage, close_day`.
+
+A sorted item names one **place** (D32): `ledger:<project>` (only with the entry command's
+`command` and `exit: 0`), `holding`, or `library:<drawer>` (to_read, to_watch, open_topics,
+ideas). `inbox_sorted` and `held_sorted` carry it in `to`; a task sent away is a `drop` with
+`sent_to`; a promoted library item is a `library_decide` with `decision: promote` and `to`.
+The library and the holding list are folded from every day's diary; their markdown files are
+views the writer rewrites.
 
 ## 3 · The writer CLI
 
@@ -34,6 +43,26 @@ drift_warn, drift_reply, break_start, break_end, usage, close_day`.
 `status` (today.json) and `view` (markdown). JSON on stdout. Exit codes: **0** written,
 **1** refused (rule or schema; nothing written), **2** no data folder. **Nobody writes the
 diary any other way**: the mod calls it with `$.process.run`, the skill with Bash.
+
+Piece 4 adds:
+
+- `sort [--task ID] --data '{"item"|"held"|"library": ID, "project"?, "date"?, "drawer"?, "title"?, "what"?}' [--dry-run]`:
+  sends one thing to its one place by the purpose rule (D32). A project with an `entry`
+  runs it first, outside the lock, and writes the event only on exit 0; a failure writes
+  nothing. `--dry-run` prints the place and the exact `command` and writes nothing.
+  `inbox-sorted` and `held-sorted` are not actions of their own, and `drop` with `sent_to`
+  or `library-decide` with `promote` are refused outside `sort`.
+- `library [--day D]`: `{library, holding, offer}`; `offer` is the one item untouched for 5
+  weeks this close asks about, or null once a decision was written today (D33).
+- `library-touch` / `library-decide` (`keep` | `drop`) on a library item.
+- `exception --data '{"for": "YYYY-MM-DD", "why": "..."}'`: a written exception, never ahead.
+- `stats [--day D] [--since D]`: the fulfilled-day rate and the list of days (D7, D41, D63).
+- `close-day` also returns `git`: the commit of `diary/` and `state/` when the data folder is
+  a git repository, or why it was skipped (D69).
+
+`config/projects.toml`: `[[project]]` with `id`, `path` and an optional `entry`, a command
+line run in `path` with `{title}`, `{what}`, `{date}` and `{project}` filled in, each as one
+argument (no shell). A relative program path is taken inside `path`.
 
 Rules the writer enforces: one open day (D24, D28); automatic carry-over at `open-day`
 (D28); one active task, starting another auto-pauses (D10); a task starts only with

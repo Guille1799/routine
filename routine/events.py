@@ -34,7 +34,11 @@ TYPES: dict[str, tuple[tuple[str, ...], bool]] = {
     "wait": ((), True),                    # a session works alone on it: paused that moves on (D62)
     "reopen": (("why",), True),            # the only way back from done or dropped (D57)
     "inbox": (("text",), False),           # one capture point during the day (D26)
-    "inbox_sorted": (("item", "to"), False),
+    "inbox_sorted": (("item", "to", "text"), False),  # where an inbox item went (D32); see PLACES
+    "held_sorted": (("item", "to", "text"), False),   # a held item sent on, once its project has a way in (D34)
+    "library_touch": (("item",), False),              # the user used a library item: its 5 weeks restart (D33)
+    "library_decide": (("item", "decision"), False),  # keep | drop | promote (promote carries "to") (D33)
+    "exception": (("for", "why"), False),             # a written exception for a day (D7, D41)
     "said": (("text", "kind"), False),     # things the user said, reusable later (D44)
     "drift_warn": (("message",), True),
     "drift_reply": (("action",), True),    # action: back | continue (+ why)
@@ -59,9 +63,35 @@ EDITABLE_CARD_FIELDS = ("title", "done_when", "first_step", "perimeter", "kind",
 
 _DAY = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
+# Where a sorted item can go (D32): a project's ledger, the shared holding list (D34) or a
+# library drawer (D26). Written as "ledger:<project>", "holding" or "library:<drawer>".
+DRAWERS = ("to_read", "to_watch", "open_topics", "ideas")
+LIBRARY_DECISIONS = ("keep", "drop", "promote")
+
 
 class EventError(ValueError):
     """An event that does not follow the schema. Nothing is written."""
+
+
+def check_place(data: dict) -> None:
+    """A sorted item names one valid place, with what that place needs to be checked later."""
+    to = data.get("to") if "to" in data else data.get("sent_to")
+    if not isinstance(to, str):
+        raise EventError("the place must be ledger:<project>, holding or library:<drawer>")
+    kind, _, name = to.partition(":")
+    if kind == "ledger":
+        if not name:
+            raise EventError("ledger:<project> needs the project")
+        if data.get("exit") != 0 or not data.get("command"):
+            raise EventError("a ledger place is written only after its entry command ran and exited 0")
+    elif kind == "holding":
+        if name:
+            raise EventError("the holding list has no name: use holding")
+    elif kind == "library":
+        if name not in DRAWERS:
+            raise EventError(f"unknown library drawer: {name!r} (one of {', '.join(DRAWERS)})")
+    else:
+        raise EventError(f"unknown place: {to!r}")
 
 
 def validate(event: dict) -> dict:
@@ -102,6 +132,22 @@ def validate(event: dict) -> dict:
             raise EventError(f"these card fields cannot be edited: {', '.join(unknown)}")
         if any(k in TASK_FIELDS_REQUIRED_TO_START and not str(v).strip() for k, v in changes.items()):
             raise EventError("done_when, first_step and perimeter cannot be emptied")
+    if etype in ("inbox_sorted", "held_sorted") or (etype == "drop" and "sent_to" in data):
+        check_place(data)
+    if etype in ("held_sorted", "drop") and str(data.get("to", data.get("sent_to", ""))).startswith("library:"):
+        raise EventError("a task has a purpose: it goes to a ledger or the holding list, never the library (D32)")
+    if etype == "library_decide":
+        if data["decision"] not in LIBRARY_DECISIONS:
+            raise EventError(f"a library decision is one of {', '.join(LIBRARY_DECISIONS)}")
+        if data["decision"] == "promote":
+            check_place(data)
+            if data["to"].startswith("library:"):
+                raise EventError("promoting takes an item out of the library")
+    if etype == "exception":
+        if not _DAY.match(str(data["for"])):
+            raise EventError("an exception is for a day: YYYY-MM-DD")
+        if not str(data["why"]).strip():
+            raise EventError("a written exception needs its reason")
     if etype == "checkpoint" and not str(data.get("note", "")).strip():
         raise EventError("a checkpoint needs a note")
     if etype == "drift_reply" and data.get("action") not in ("back", "continue", "unanswered"):
