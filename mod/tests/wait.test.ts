@@ -58,7 +58,7 @@ test('R39: the band offers Wait on the active task, and keeps it off a narrow ba
   const wide = await $.ui.mount({ ...band(120), surface: 'desktop' })
   await wide.press({ key: 'wait' })
   expect(writes(w)).toEqual([argvOf(C.wait!, ACTIVE)])
-  const narrow = await $.ui.mount({ ...band(56), surface: 'terminal' })
+  const narrow = await $.ui.mount({ ...band(34), surface: 'terminal' })
   expect(await narrow.find({ key: 'wait' })).toBeUndefined()
 })
 

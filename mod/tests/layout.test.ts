@@ -1,11 +1,12 @@
-// The band at the widths G works with (G, 2026-10-12: at normal width the buttons ran off the
-// edge and a bare "19/25" said nothing). The line is laid out against its width: the title is
-// cut first, then the other session's task, the date and the long forms, then the button
-// labels shrink to their key, then the secondary buttons go. The phase in words and Tasks stay.
+// The band in two rows (G, 2026-10-12): row 1 says where this session is (progress, the task,
+// the phase in words, the other session's task), row 2 holds every button with its key and
+// the data time. Each row fits its width on its own: in row 1 the other session's task goes
+// first, then the date, then the title is cut; in row 2 the labels shrink to their key and the
+// secondary buttons go only in very narrow panes. The phase and Tasks always stay.
 import { describe, expect, test } from 'claude-code/testing'
 
 import type { BandParts } from '../hooks/core'
-import { BUTTON_CHROME, buttonLabel, fitBand } from '../hooks/core'
+import { BUTTON_CHROME, buttonLabel, fitRows } from '../hooks/core'
 import { BAND_PROPS, OPTIONS, PANE_PROPS, START, today, world } from './world'
 
 const ACTIVE = 't-20261012-bbbbbb'
@@ -16,18 +17,25 @@ function band(columns: number) {
   return { plugin: 'routine', component: 'AbovePrompt', props: { ...(BAND_PROPS as object), bodyColumns: columns } as never } as const
 }
 
-async function text(ui: { drawn: () => Promise<unknown> }): Promise<string> {
-  const parts: string[] = []
-  const walk = (n: unknown): void => {
-    if (typeof n === 'string') parts.push(n)
-    else if (n && typeof n === 'object') {
-      const o = n as { children?: unknown[]; props?: { label?: string } }
-      if (o.props?.label) parts.push(`[${o.props.label}]`)
-      for (const c of o.children ?? []) walk(c)
-    }
-  }
-  walk(await ui.drawn())
-  return parts.join(' ').replace(/\s+/g, ' ')
+type Node = { type: string; props?: { key?: string; label?: string }; children?: unknown[] }
+
+function textOf(n: unknown): string {
+  if (typeof n === 'string') return n
+  const o = n as Node
+  return [o.props?.label ? `[${o.props.label}]` : '', ...(o.children ?? []).map(textOf)].filter(Boolean).join(' ')
+}
+
+/** The band's rows as drawn: each row's text, and its width as the estimate counts it. */
+async function rows(ui: { drawn: () => Promise<unknown> }): Promise<{ text: string; width: number }[]> {
+  const root = (await ui.drawn()) as Node
+  return (root.children as Node[]).map(row => ({
+    text: textOf(row).replace(/\s+/g, ' '),
+    width: (row.children ?? []).reduce((w: number, c: unknown, n: number) => {
+      const el = c as Node
+      const own = el.type === 'Button' ? (el.props?.label?.length ?? 0) + BUTTON_CHROME : (el.children ?? []).join('').length
+      return w + own + (n > 0 ? 1 : 0)
+    }, 0),
+  }))
 }
 
 /** G's case: a long title, a pomodoro 11 minutes in. */
@@ -37,74 +45,71 @@ function pomodoro(title = LONG) {
   return t
 }
 
-/** The width the band's line takes as drawn: texts and labels, a gap between items, the chrome of each button. */
-async function drawnWidth(ui: { drawn: () => Promise<unknown> }): Promise<number> {
-  const line = ((await ui.drawn()) as { children: { props?: { key?: string }; children: unknown[] }[] }).children[0]!
-  return line.children.reduce((w: number, c: unknown, n: number) => {
-    const el = c as { type: string; props?: { label?: string }; children?: unknown[] }
-    const own = el.type === 'Button' ? (el.props?.label?.length ?? 0) + BUTTON_CHROME : (el.children ?? []).join('').length
-    return w + own + (n > 0 ? 1 : 0)
-  }, 0)
-}
-
-for (const [name, columns] of [['wide', 140], ['normal', 100], ['half', 70], ['third', 60]] as const) {
-  test(`R17/R46: ${name} (${columns} columns): the line fits, the phase reads in words, Tasks stays`, { options: OPTIONS }, async ($, on) => {
+for (const [name, columns] of [['wide', 140], ['normal', 100], ['half', 70], ['third', 66]] as const) {
+  test(`R17/R46: ${name} (${columns} columns): two rows that fit; the phase in words; every button with its name`, { options: OPTIONS }, async ($, on) => {
     world(on, { today: pomodoro() })
     await $.session.start(START)
     for (const surface of ['terminal', 'desktop'] as const) {
       const ui = await $.ui.mount({ ...band(columns), surface })
-      const line = await text(ui)
-      expect(line).toContain('Pomodoro · work 11/25')
-      expect(await ui.find({ key: 'tasks' })).toBeDefined()
-      expect((await ui.find({ key: 'tasks' }))?.props.label).toBe('Tasks')
-      expect(await ui.find({ key: 'pause' })).toBeDefined()
-      expect(await ui.find({ key: 'done' })).toBeDefined()
-      expect(line).toMatch(/T2 An/)
-      expect(await drawnWidth(ui)).toBeLessThanOrEqual(columns)
+      const [info, actions, ...more] = await rows(ui)
+      expect(more).toEqual([])
+      expect(info!.text).toContain('Pomodoro · work 11/25')
+      expect(info!.text).toMatch(/T2 Ans/)
+      expect(actions!.text).toContain('[Pause] [Done] [Wait] [Break] [Recap] [Tasks]')
+      expect(info!.width).toBeLessThanOrEqual(columns)
+      expect(actions!.width).toBeLessThanOrEqual(columns)
       await ui.unmount()
     }
   })
 }
 
-test('R17: the title is cut first, with an ellipsis, before any button shrinks', { options: OPTIONS }, async ($, on) => {
-  world(on, { today: pomodoro() })
-  await $.session.start(START)
-  const ui = await $.ui.mount({ ...band(140), surface: 'desktop' })
-  const line = await text(ui)
-  expect(line).toContain('… · Pomodoro · work 11/25 [Pause] [Done]')
-  expect(line).not.toContain(LONG)
-})
-
-test('R17: a short title is kept whole while there is room', { options: OPTIONS }, async ($, on) => {
+test('R17: a short title is kept whole, with the date and the progress, when there is room', { options: OPTIONS }, async ($, on) => {
   world(on, { today: pomodoro('Read section 3') })
   await $.session.start(START)
-  expect(await text(await $.ui.mount({ ...band(140), surface: 'desktop' }))).toContain('2026-10-12 1 of 3 done · T2 Read section 3 · Pomodoro · work 11/25 [Pause] [Done] [Wait] [Break] [Recap] [Tasks] data 09:41')
+  const [info, actions] = await rows(await $.ui.mount({ ...band(100), surface: 'desktop' }))
+  expect(info!.text).toBe('2026-10-12 1 of 3 done · T2 Read section 3 · Pomodoro · work 11/25')
+  expect(actions!.text).toBe('[Pause] [Done] [Wait] [Break] [Recap] [Tasks] data 09:41')
 })
 
-test('R17: narrow, the button labels shrink to their key, and Tasks keeps its name', { options: OPTIONS }, async ($, on) => {
+test('R17: the long title is cut with an ellipsis before the phase is touched', { options: OPTIONS }, async ($, on) => {
   world(on, { today: pomodoro() })
   await $.session.start(START)
-  const line = await text(await $.ui.mount({ ...band(70), surface: 'terminal' }))
-  expect(line).toContain('[P] [D]')
-  expect(line).toContain('[Tasks]')
-  expect(line).not.toContain('[Pause]')
+  const [info] = await rows(await $.ui.mount({ ...band(70), surface: 'desktop' }))
+  expect(info!.text).toContain('… · Pomodoro · work 11/25')
+  expect(info!.text).not.toContain(LONG)
 })
 
-test('R26/R25: Recap and Break are also in the Tasks pane, so a narrow band loses nothing', { options: OPTIONS }, async ($, on) => {
+test('R17: a narrow pane keeps every button, by its key; Tasks keeps its name', { options: OPTIONS }, async ($, on) => {
+  world(on, { today: pomodoro() })
+  await $.session.start(START)
+  const [info, actions] = await rows(await $.ui.mount({ ...band(56), surface: 'desktop' }))
+  expect(actions!.text).toBe('[P] [D] [W] [B] [R] [Tasks] 09:41')
+  expect(info!.text).toContain('Pomodoro · work 11/25')
+})
+
+test('R17: very narrow, the labels shrink to their key, the secondary buttons go, Tasks stays', { options: OPTIONS }, async ($, on) => {
+  world(on, { today: pomodoro() })
+  await $.session.start(START)
+  const [info, actions] = await rows(await $.ui.mount({ ...band(34), surface: 'terminal' }))
+  expect(actions!.text).toBe('[P] [D] [Tasks] 09:41')
+  expect(info!.text).toContain('Pomodoro · work 11/25')
+})
+
+test('R26/R25: Recap and Break are also in the Tasks pane, so a very narrow band loses nothing', { options: OPTIONS }, async ($, on) => {
   const w = world(on)
   await $.session.start(START)
   const pane = await $.ui.mount({ ...PANE, surface: 'desktop' })
   await pane.press({ key: 'pane-recap' })
   expect(w.forks).toHaveLength(1)
   await pane.press({ key: 'pane-break' })
-  const ui = await $.ui.mount({ ...band(48), surface: 'desktop' })
+  const ui = await $.ui.mount({ ...band(34), surface: 'desktop' })
   expect(await ui.find({ key: 'break-0' })).toBeDefined()
 })
 
-describe('fitBand', () => {
+describe('fitRows', () => {
   const parts: BandParts = {
     date: '2026-10-12', progress: '2 of 13 done', progressShort: '2/13',
-    title: `T3 ${LONG}`, phase: 'Pomodoro · work 19/25',
+    title: `T3 ${LONG}`, phase: 'Pomodoro · work 19/25', extra: 'now: T9 Read the report elsewhere',
     buttons: [
       { key: 'pause', label: 'Pause', hotkey: 'p' }, { key: 'done', label: 'Done', hotkey: 'd' },
       { key: 'wait', label: 'Wait', hotkey: 'w', secondary: true }, { key: 'break', label: 'Break', hotkey: 'b', secondary: true },
@@ -113,24 +118,37 @@ describe('fitBand', () => {
     asOf: 'data 09:41', asOfShort: '09:41',
   }
 
-  // Below about 58 columns G's long case cannot fit without dropping the phase, which never goes.
-  test('at every width from 60 to 200 the estimate fits, the phase is whole and Tasks stays', () => {
-    for (let columns = 60; columns <= 200; columns += 1) {
-      const lay = fitBand(columns, parts)
-      expect(lay.width).toBeLessThanOrEqual(columns)
-      expect(lay.dropped).not.toContain('tasks')
-      expect(lay.dropped).not.toContain('pause')
-      expect(lay.dropped).not.toContain('done')
-      expect(buttonLabel(parts.buttons[5]!, lay.compact)).toBe('Tasks')
+  test('from 40 to 200 columns both rows fit, the phase is whole, Tasks, Pause and Done stay', () => {
+    for (let columns = 40; columns <= 200; columns += 1) {
+      const lay = fitRows(columns, parts)
+      expect(lay.info.width).toBeLessThanOrEqual(columns)
+      expect(lay.actions.width).toBeLessThanOrEqual(columns)
+      for (const key of ['tasks', 'pause', 'done']) expect(lay.actions.dropped).not.toContain(key)
+      expect(buttonLabel(parts.buttons[5]!, lay.actions.compact)).toBe('Tasks')
     }
   })
 
-  test('the more room, the more is kept', () => {
-    const kept = (c: number) => {
-      const lay = fitBand(c, parts)
-      const progress = lay.progress === 'long' ? 2 : lay.progress === 'short' ? 1 : 0
-      return (lay.date ? 1 : 0) + progress + (lay.compact ? 0 : 1) + (lay.extra ? 1 : 0) + (lay.asOf === 'long' ? 1 : 0) - lay.dropped.length
+  test('every button keeps its name from 63 columns up (six labels and the time)', () => {
+    for (let columns = 63; columns <= 200; columns += 1) {
+      const lay = fitRows(columns, parts)
+      expect(lay.actions.compact).toBe(false)
+      expect(lay.actions.dropped).toEqual([])
     }
-    for (let columns = 61; columns <= 200; columns += 1) expect(kept(columns)).toBeGreaterThanOrEqual(kept(columns - 1))
+  })
+
+  test('the more room, the more each row keeps', () => {
+    const kept = (c: number) => {
+      const { info, actions } = fitRows(c, parts)
+      const progress = info.progress === 'long' ? 2 : info.progress === 'short' ? 1 : 0
+      return [
+        (info.extra ? 4 : 0) + (info.date ? 2 : 0) + progress + info.title.length / 1000,
+        (actions.asOf === 'long' ? 1 : 0) + (actions.compact ? 0 : 2) - actions.dropped.length,
+      ]
+    }
+    for (let columns = 41; columns <= 200; columns += 1) {
+      const [a, b] = [kept(columns - 1), kept(columns)]
+      expect(b[0]!).toBeGreaterThanOrEqual(a[0]!)
+      expect(b[1]!).toBeGreaterThanOrEqual(a[1]!)
+    }
   })
 })

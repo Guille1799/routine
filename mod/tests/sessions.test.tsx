@@ -61,15 +61,14 @@ test('D64: each session sees its own task on the band; the day\'s active one els
     seen[session] = await text(ui)
     await ui.unmount()
   }
-  expect(seen.A).toContain('T1 Write the intro · paused [Resume]')
-  expect(seen.A).toContain('now: T2 elsewhere')
+  expect(seen.A).toContain('T1 Write the intro · paused now: T2 Read section 3 elsewhere [Resume]')
   expect(seen.A).not.toContain('[Pause]')
   expect(seen.B).toContain('T2 Read section 3 · 41m [Pause] [Done] [Wait]')
   expect(seen.B).not.toContain('elsewhere')
-  expect(seen.C).toContain('T3 Slow priority · waiting since 09:10 [Done]')
-  expect(seen.C).toContain('now: T2 elsewhere')
+  expect(seen.C).toContain('T3 Slow priority · waiting since 09:10 now: T2 Read section 3 elsewhere [Done]')
+  expect(seen.C).toContain('now: T2 Read section 3 elsewhere')
   expect(seen.D).toContain("no task in this session · say 'let's do T#'")
-  expect(seen.D).toContain('now: T2 elsewhere')
+  expect(seen.D).toContain('now: T2 Read section 3 elsewhere')
   expect(seen.D).not.toContain('[Done]')
 })
 
@@ -78,8 +77,7 @@ test('D64: narrow, the other session\'s task gives way before this session\'s ow
   await $.session.start(START)
   w.session = 'A'
   const line = await text(await $.ui.mount({ ...band(56), surface: 'terminal' }))
-  expect(line).toContain('· paused [S]')
-  expect(line).toContain('T1 Write')
+  expect(line).toContain('T1 Write the intro · paused [Resume]')
   expect(line).not.toContain('elsewhere')
 })
 
