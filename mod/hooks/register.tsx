@@ -26,6 +26,7 @@ import {
   promptContext,
   readWriterAnswer,
   resolveTask,
+  sessionChip,
   shortProgress,
   aliasOf,
   taskList,
@@ -716,6 +717,14 @@ export const register: Register = (on, options) => {
     const openPause = b.resume && f?.task === b.resume.id ? b.resume.reason : undefined
     if (f) rows.push(...(await formRows($, f, { Box, Text, Button, Input }, openPause)))
     return <Box key="band" flexDirection="column">{rows}</Box>
+  })
+
+  // This session's task as a footer chip (D64): Desktop draws SessionMode in every pane of a
+  // split view, where it draws the band only in the active one. Added to the engine's modes.
+  on('ui.render', { component: 'SessionMode' }, async ($, e, next) => {
+    const r = await readToday($)
+    const chip = sessionChip(r.today, await $.session.id(), await $.clock.now())
+    return chip ? next({ ...e, props: { ...e.props, modes: [...e.props.modes, chip] } }) : next(e)
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {

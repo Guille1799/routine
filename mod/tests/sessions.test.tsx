@@ -166,3 +166,46 @@ test('D64: a session whose task just finished, with no active task and a side ta
     expect(line).not.toContain('elsewhere')
   }
 })
+
+test('D64: every session gets its own footer chip, the one Desktop draws in every pane of a split view', { options: OPTIONS }, async ($, on) => {
+  const drawn: string[][] = []
+  // The engine beneath: it draws the modes it is handed, as the footer does.
+  on('ui.render', { component: 'SessionMode' }, ($, e) => {
+    drawn.push([...(e.props as { modes: string[] }).modes])
+    const { Text } = $.ui.resolve(e)
+    return <Text>{(e.props as { modes: string[] }).modes.join(' & ')}</Text>
+  })
+  const w = world(on, { today: day() })
+  await $.session.start(START)
+  for (const surface of ['terminal', 'desktop'] as const) {
+    drawn.length = 0
+    for (const session of ['A', 'B', 'C', 'D']) {
+      w.session = session
+      const ui = await $.ui.mount({ plugin: 'routine', surface, component: 'SessionMode', requestId: 'session-mode', props: { modes: ['focus'] } as never })
+      await ui.unmount()
+    }
+    expect(drawn).toEqual([
+      ['focus', 'T1 paused'],
+      ['focus', 'T2 \u25b6 41m'],
+      ['focus', 'T3 waiting 09:10'],
+      ['focus', 'no task here'],
+    ])
+  }
+})
+
+test('D64: the chip says when no day is open, and keeps out of the way with no data folder', { options: OPTIONS }, async ($, on) => {
+  const drawn: string[][] = []
+  on('ui.render', { component: 'SessionMode' }, ($, e) => {
+    drawn.push([...(e.props as { modes: string[] }).modes])
+    const { Text } = $.ui.resolve(e)
+    return <Text>x</Text>
+  })
+  const w = world(on, { today: today({ open: false, closed: true }) })
+  await $.session.start(START)
+  const props = { plugin: 'routine', surface: 'desktop', component: 'SessionMode', requestId: 'session-mode', props: { modes: [] } as never } as const
+  await (await $.ui.mount(props)).unmount()
+  w.today = undefined
+  w.dataExists = false
+  await (await $.ui.mount(props)).unmount()
+  expect(drawn).toEqual([['no day open'], []])
+})

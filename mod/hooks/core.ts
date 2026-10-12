@@ -486,3 +486,22 @@ export function cardChanges(card: Card, values: Record<string, string>): Record<
   }
   return out
 }
+
+/**
+ * The per-session chip in the prompt footer (SessionMode): Desktop draws it in every pane of
+ * a split view, where the band shows only in the active one. 24 characters at most, the
+ * width Desktop gives the chip.
+ */
+export function sessionChip(today: Today | undefined, session: string, nowMs: number): string | undefined {
+  if (!today) return undefined
+  if (!today.open) return 'no day open'
+  const id = ownTask(today, session)
+  const card = id ? today.tasks[id] : undefined
+  if (!id || !card) return 'no task here'
+  const alias = aliasOf(today, id)
+  let label: string
+  if (card.status === 'active') label = card.since ? `${alias} \u25b6 ${formatMinutes(minutesBetween(card.since, nowMs))}` : `${alias} \u25b6`
+  else if (card.status === 'waiting') label = `${alias} waiting ${clockOf(card.waiting_since ?? null)}`
+  else label = `${alias} paused`
+  return label.slice(0, 24)
+}
