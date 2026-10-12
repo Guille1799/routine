@@ -24,7 +24,27 @@ export const EXAMPLE_FIELDS: DoneField[] = [
   { id: 'note', label: 'Done / stopped at / next / I take away', kind: 'text', prefill: 'session', required: true },
 ]
 
+/**
+ * Today's read model, consistent as the writer folds it: the task named `active` is
+ * active and this session's (D64); any other task the fixture had active is paused.
+ */
 export function today(over: Partial<Today> = {}): Today {
+  const t = base(over)
+  if (over.tasks) return t
+  for (const id of t.order) {
+    const card = t.tasks[id]!
+    if (id !== t.active && card.status === 'active') {
+      const { since: _since, ...rest } = card
+      t.tasks[id] = { ...rest, status: 'paused' }
+    }
+  }
+  if (t.active && t.tasks[t.active]?.status !== 'active') {
+    t.tasks[t.active] = { ...t.tasks[t.active]!, status: 'active', session: SESSION, since: '2026-10-12T09:30:00+02:00' }
+  }
+  return t
+}
+
+function base(over: Partial<Today>): Today {
   return {
     day: '2026-10-12',
     open: true,
@@ -34,7 +54,7 @@ export function today(over: Partial<Today> = {}): Today {
     tasks: {
       't-20261012-aaaaaa': { id: 't-20261012-aaaaaa', title: 'Answer two mails', status: 'done', notes: [] },
       't-20261012-bbbbbb': {
-        id: 't-20261012-bbbbbb', title: 'Read section 3', status: 'active', since: '2026-10-12T09:00:00+02:00',
+        id: 't-20261012-bbbbbb', title: 'Read section 3', status: 'active', since: '2026-10-12T09:00:00+02:00', session: SESSION,
         done_when: 'notes written', first_step: 'open the pdf', perimeter: 'questions about the text, unknown terms',
         notes: ['read 3.1; next 3.2'],
       },
@@ -58,6 +78,8 @@ export type World = {
   dataExists: boolean
   surfaces: string[]
   fields: DoneField[] | { exit: number; error: string }
+  /** What `python -m routine settings` answers (routine.toml with defaults applied). */
+  settings: { idle_pause_minutes: number } | { exit: number; error: string }
   commands: { name: string; source: 'builtin' | 'plugin' | 'user' | 'mcp' }[]
   fork: string | 'nothing-to-fork'
   /** Exit code the writer answers next (0 written, 1 refused). */
@@ -71,6 +93,8 @@ export type World = {
   logs: string[]
   toasts: string[]
   opened: string[]
+  /** The session the engine says this is (D64): change it to stand for another session. */
+  session: string
   /** The mocked clock, to move to another day. */
   clock: MockClock
 }
@@ -85,9 +109,9 @@ export function argvOf(call: WriterCall, task?: string): string[] {
   })
 }
 
-/** Writer runs only: the `fields` reads and the load-time `refresh` left out. */
+/** Writer runs only: the `fields` and `settings` reads and the load-time `refresh` left out. */
 export function writes(w: World): string[][] {
-  return w.runs.filter(a => a[3] !== 'fields' && a[3] !== 'refresh')
+  return w.runs.filter(a => !['fields', 'settings', 'refresh'].includes(a[3] ?? ''))
 }
 
 /** The load-time rebuilds of today.json. */
@@ -104,6 +128,7 @@ export function world(on: On, over: Partial<World> = {}): World {
     dataExists: true,
     surfaces: ['desktop'],
     fields: EXAMPLE_FIELDS,
+    settings: { idle_pause_minutes: 20 },
     commands: [],
     fork: 'drafted note',
     writerExit: 0,
@@ -115,13 +140,14 @@ export function world(on: On, over: Partial<World> = {}): World {
     logs: [],
     toasts: [],
     opened: [],
+    session: SESSION,
     clock: undefined as unknown as MockClock,
     ...over,
   }
   w.clock = mock.clock(on, { now: NOW })
   mock.env(on, {})
   on('session.surfaces', () => ({ value: w.surfaces as never }))
-  on('session.id', () => ({ value: SESSION }))
+  on('session.id', () => ({ value: w.session }))
   on('session.cwd', () => ({ value: CWD }))
   on('fs.read', ($, e) => {
     if (slash(e.path) === `${DATA}/state/today.json` && w.today) return { value: JSON.stringify(w.today) }
@@ -138,6 +164,10 @@ export function world(on: On, over: Partial<World> = {}): World {
     const answer = (exitCode: number, stdout: string) => ({
       value: { exitCode, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false },
     })
+    if (argv[3] === 'settings') {
+      if ('exit' in w.settings) return answer(w.settings.exit, JSON.stringify({ ok: false, error: w.settings.error }))
+      return answer(0, JSON.stringify({ ok: true, settings: w.settings }))
+    }
     if (argv[3] === 'fields') {
       if (Array.isArray(w.fields)) return answer(0, JSON.stringify({ ok: true, fields: w.fields }))
       return answer(w.fields.exit, JSON.stringify({ ok: false, error: w.fields.error }))

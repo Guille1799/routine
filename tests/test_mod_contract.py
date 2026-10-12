@@ -21,8 +21,8 @@ from routine import state
 REPO = Path(__file__).resolve().parent.parent
 CONTRACT = REPO / "mod" / "hooks" / "contract.ts"
 # The order a day would see them in; every contract entry must appear here.
-SCENARIO = ["start", "drift_warn", "drift_reply", "inbox", "said", "break_start", "break_end",
-            "usage", "pause", "start", "pause_click", "pause_reason", "checkpoint", "start", "done",
+SCENARIO = ["task_edit", "wait", "start", "drift_warn", "drift_reply", "inbox", "said", "break_start", "break_end",
+            "usage", "pause", "start", "pause_click", "pause_reason", "checkpoint", "start", "pause_idle", "start", "wait", "start", "done",
             "reopen"]
 
 
@@ -68,10 +68,12 @@ def test_r16_every_call_the_mod_makes_is_written_by_the_real_writer(data):
     assert added.returncode == 0, added.stdout
     task = json.loads(added.stdout)["events"][0]["task"]
 
-    for name in SCENARIO:
+    for n, name in enumerate(SCENARIO):
         done = run(argv(calls[name], task), data)
         assert done.returncode == 0, f"{name}: {done.stdout} {done.stderr}"
         st = state.current(data)
+        if name == "wait" and n == 1:  # a side task started from pending in its session (D64)
+            assert st["tasks"][task]["status"] == "waiting" and st["tasks"][task]["session"] == "session-1"
         if name == "start":  # the band's elapsed time reads it (R17)
             assert st["tasks"][task]["since"] == json.loads(done.stdout)["events"][-1]["ts"]
         if name == "usage":  # the per-task total (R27)
@@ -105,3 +107,17 @@ def test_r32_the_fields_the_mod_reads_come_from_the_config(data):
     assert fields[-1]["prefill"] == "session"
     # the done call in the contract carries exactly these fields
     assert set(contract()["done"]["data"]["fields"]) == {f["id"] for f in fields}
+
+
+def test_r38_the_settings_the_mod_reads_come_from_the_config(data):
+    """The mod reads `python -m routine settings` as {"settings": {"idle_pause_minutes": n}}
+    (mod/hooks/register.tsx idleMinutes): defaults without a file, the user's value with one."""
+    base = [sys.executable, "-m", "routine", "settings"]
+    out = run(base, data)
+    assert out.returncode == 0, out.stdout
+    assert json.loads(out.stdout)["settings"]["idle_pause_minutes"] == 20
+    (data / "config").mkdir()
+    (data / "config" / "routine.toml").write_text("idle_pause_minutes = 0\n", encoding="utf-8")
+    assert json.loads(run(base, data).stdout)["settings"]["idle_pause_minutes"] == 0
+    (data / "config" / "routine.toml").write_text("idle_pause_minutes = true\n", encoding="utf-8")
+    assert run(base, data).returncode == 1  # the mod then keeps the idle pause off

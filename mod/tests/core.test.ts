@@ -3,7 +3,7 @@
 import { describe, expect, test } from 'claude-code/testing'
 
 import { band, breakLeftMs, inboxText, readWriterAnswer, resolveTask, writerArgv } from '../hooks/core'
-import { NOW, today } from './world'
+import { NOW, SESSION, today } from './world'
 
 describe('writer argv', () => {
   test('is pinned: action with dashes, --task, --data JSON, --session, --cwd', () => {
@@ -53,7 +53,7 @@ describe('band', () => {
   test('elapsed time is shown only when the writer says when the task started', () => {
     const t = today()
     delete t.tasks['t-20261012-bbbbbb']!.since
-    expect(band(t, NOW).task).toEqual({ alias: 'T2', title: 'Read section 3', elapsed: undefined, breakDue: false })
+    expect(band(t, NOW, SESSION).task).toEqual({ id: 't-20261012-bbbbbb', alias: 'T2', title: 'Read section 3', elapsed: undefined, breakDue: false })
   })
 })
 

@@ -12,10 +12,14 @@ export type Card = {
   project?: string
   priority?: boolean
   last_note?: string
-  status: 'pending' | 'active' | 'paused' | 'done' | 'dropped'
+  status: 'pending' | 'active' | 'paused' | 'waiting' | 'done' | 'dropped'
   carried?: number
   notes?: string[]
   since?: string
+  /** When the task started waiting (D62): a session works alone on it, the active slot is free. */
+  waiting_since?: string
+  /** The session of its last start or wait (D64): that session's band and context show it. */
+  session?: string
   /** Every pause, at the click; reason null until the user picks one (D56). */
   pauses?: { at: string; reason: string | null }[]
 }
@@ -49,7 +53,7 @@ export type FieldValue = string | boolean
 
 // The writer CLI's actions this mod uses. The CLI spells them with dashes.
 export type WriterAction =
-  | 'start' | 'pause' | 'pause_reason' | 'checkpoint' | 'done' | 'reopen' | 'drift_warn' | 'drift_reply'
+  | 'start' | 'pause' | 'pause_reason' | 'checkpoint' | 'wait' | 'done' | 'reopen' | 'task_edit' | 'drift_warn' | 'drift_reply'
   | 'inbox' | 'said' | 'break_start' | 'break_end' | 'usage'
 
 export type WriterCall = {
@@ -149,18 +153,40 @@ export function breakLeftMs(brk: Today['break'], nowMs: number): number | undefi
 /** Why a pause happened, buttons only (D56). The writer keeps the same list. */
 export const PAUSE_REASONS = ['planned', 'interrupted', 'blocked', 'switched', 'low energy', 'lost focus', 'other'] as const
 
+/**
+ * This session's task (D64): the unfinished task whose last start or wait came from this
+ * session. Active first, then waiting, then paused (the one paused last first); a session
+ * that started several keeps the one it is on.
+ */
+export function ownTask(today: Today, session: string): string | undefined {
+  const rank = (id: string): number => {
+    const st = today.tasks[id]?.status
+    if (st === 'active') return 0
+    if (st === 'waiting') return 1
+    if (st === 'paused') return id === today.last_paused ? 2 : 3
+    return 9
+  }
+  const mine = today.order.filter(id => today.tasks[id]?.session === session && rank(id) < 9)
+  return mine.sort((a, b) => rank(a) - rank(b))[0]
+}
+
 export type Band = {
   date: string
   progress: string
-  task?: { alias: string; title: string; elapsed?: string; breakDue: boolean }
-  /** With no active task, the task paused last: the band offers Resume. */
+  /** This session's task, active: with its timer and Pause / Done / Wait. */
+  task?: { id: string; alias: string; title: string; elapsed?: string; breakDue: boolean }
+  /** This session's task, paused: the band offers Resume. */
   resume?: { id: string; alias: string; title: string; reason: string | null }
+  /** This session's task, waiting (D62): a side task this session works on alone. */
+  waiting?: { id: string; alias: string; title: string; since: string }
+  /** The day's active task when it belongs to another session, shown dimmed (D64). */
+  elsewhere?: { alias: string; title: string }
   break?: { leftMin: number; isOver: boolean }
   asOf: string
 }
 
-/** What the band says: date · n of m done · active task and its time · data time (R17). */
-export function band(today: Today, nowMs: number): Band {
+/** What the band of `session` says (D64): its own task, the day's active one if elsewhere, the data time (R17). */
+export function band(today: Today, nowMs: number, session = ''): Band {
   const live = today.order.filter(id => today.tasks[id]?.status !== 'dropped')
   const done = live.filter(id => today.tasks[id]?.status === 'done').length
   const out: Band = {
@@ -172,25 +198,30 @@ export function band(today: Today, nowMs: number): Band {
   if (left !== undefined) {
     out.break = { leftMin: Math.max(0, Math.ceil(left / 60000)), isOver: left <= 0 }
   }
-  if (today.active) {
-    const card = today.tasks[today.active]
-    const min = card?.since ? minutesBetween(card.since, nowMs) : undefined
+  const own = ownTask(today, session)
+  const card = own ? today.tasks[own] : undefined
+  if (own && card?.status === 'active') {
+    const min = card.since ? minutesBetween(card.since, nowMs) : undefined
     out.task = {
-      alias: aliasOf(today, today.active),
-      title: card?.title ?? today.active,
+      id: own,
+      alias: aliasOf(today, own),
+      title: card.title ?? own,
       elapsed: min === undefined ? undefined : formatMinutes(min),
       breakDue: min !== undefined && min >= POMODORO_WORK_MIN,
     }
-  } else if (today.last_paused && today.tasks[today.last_paused]?.status === 'paused') {
-    const id = today.last_paused
-    const card = today.tasks[id]
-    out.resume = { id, alias: aliasOf(today, id), title: card?.title ?? id, reason: card?.pauses?.at(-1)?.reason ?? null }
+  } else if (own && card?.status === 'waiting') {
+    out.waiting = { id: own, alias: aliasOf(today, own), title: card.title ?? own, since: clockOf(card.waiting_since ?? null) }
+  } else if (own && card?.status === 'paused') {
+    out.resume = { id: own, alias: aliasOf(today, own), title: card.title ?? own, reason: card.pauses?.at(-1)?.reason ?? null }
+  }
+  if (today.active && today.active !== own) {
+    out.elsewhere = { alias: aliasOf(today, today.active), title: today.tasks[today.active]?.title ?? today.active }
   }
   return out
 }
 
 const MARK: Record<Card['status'], string> = {
-  pending: '[ ]', active: '[>]', paused: '[~]', done: '[x]', dropped: '[-]',
+  pending: '[ ]', active: '[>]', paused: '[~]', waiting: '[w]', done: '[x]', dropped: '[-]',
 }
 
 export function taskList(today: Today): string {
@@ -207,8 +238,14 @@ export type TaskRow = {
   doneWhen?: string
   firstStep?: string
   carried: number
-  /** What the row offers: start a pending or paused task, finish the active one, reopen a finished one (D57). */
+  /** The day's one priority (D10). */
+  priority: boolean
+  /** What the row offers: start a pending, paused or waiting task, finish the active one, reopen a finished one (D57). */
   action: 'start' | 'done' | 'reopen' | null
+  /** The active and paused tasks can be set waiting (D62). */
+  canWait: boolean
+  /** For a waiting task, since when (HH:MM). */
+  waitingSince?: string
 }
 
 /** Today's full list for the pane, in today's order (the expanded band). */
@@ -224,7 +261,10 @@ export function taskRows(today: Today): TaskRow[] {
       doneWhen: t?.done_when,
       firstStep: t?.first_step,
       carried: t?.carried ?? 0,
-      action: status === 'active' ? 'done' : status === 'pending' || status === 'paused' ? 'start' : 'reopen',
+      priority: t?.priority === true,
+      action: status === 'active' ? 'done' : status === 'pending' || status === 'paused' || status === 'waiting' ? 'start' : 'reopen',
+      canWait: status === 'active' || status === 'paused',
+      waitingSince: status === 'waiting' ? clockOf(t?.waiting_since ?? null) : undefined,
     }
   })
 }
@@ -246,20 +286,31 @@ export function driftState(today: Today, task: string): 'open' | 'justified' | '
  * card and perimeter and how to treat drift (D9, D37), or today's list and how
  * to start a task. Read at send time, so it is never stale.
  */
-export function promptContext(today: Today, tool: string): string | undefined {
+export function promptContext(today: Today, tool: string, session = ''): string | undefined {
   if (!today.open) return undefined
   const lines = [`[routine] Day ${today.day}. Tasks (say "T2" for the 2nd):`, taskList(today)]
-  const id = today.active
-  if (!id) {
+  const id = ownTask(today, session)
+  const elsewhere = today.active && today.active !== id ? today.active : undefined
+  if (elsewhere) {
+    lines.push(`The day's active task is ${aliasOf(today, elsewhere)}, in another session: not this conversation's task.`)
+  }
+  const card = id ? today.tasks[id] : undefined
+  if (!id || !card) {
     lines.push(
-      `No active task. When the user says "let's do T2" (or similar), call ${tool} with action "start" and task "T2".`,
+      `No task in this session. When the user says "let's do T2" (or similar), call ${tool} with action "start" and task "T2"; ` +
+        'for a slow side task that runs here on its own, action "wait" with the task.',
     )
     return lines.join('\n')
   }
-  const card = today.tasks[id]!
+  if (card.status === 'paused') {
+    lines.push('', `This session's task ${aliasOf(today, id)} is paused: ${card.title ?? id}. "let's go on" → ${tool} action "start" with task "${aliasOf(today, id)}".`)
+    return lines.join('\n')
+  }
   lines.push(
     '',
-    `Active task ${aliasOf(today, id)}: ${card.title ?? id}`,
+    card.status === 'waiting'
+      ? `Side task ${aliasOf(today, id)} (waiting: this session works on it on its own): ${card.title ?? id}`
+      : `Active task ${aliasOf(today, id)}: ${card.title ?? id}`,
     `Done when: ${card.done_when ?? '-'}`,
     `First step: ${card.first_step ?? '-'}`,
     `Perimeter (what counts as related): ${card.perimeter ?? '-'}`,
@@ -361,4 +412,77 @@ export function planDayContext(status: DayStatus): string | undefined {
   ]
   if (status.kind === 'stale') lines.push(`Day ${status.openDay} is still open: /plan-day closes it first.`)
   return lines.join(' ')
+}
+
+/**
+ * What the band line keeps at a width (G works with 2-3 panes side by side). The task,
+ * its timer, Pause and Done always stay; the rest gives way first: the date, then the
+ * long forms, then Recap and the progress, then Tasks. Recap and Break are also in the
+ * Tasks pane, so nothing hidden here is out of reach.
+ */
+export type BandFit = {
+  date: boolean
+  progress: 'long' | 'short' | null
+  recap: boolean
+  tasks: boolean
+  /** `when-due`: Break shows only once 25 minutes of work are up. */
+  break: 'always' | 'when-due'
+  asOf: 'long' | 'short'
+}
+
+export const BAND_WIDE = 100
+export const BAND_MEDIUM = 72
+export const BAND_NARROW = 48
+
+export function bandFit(columns: number): BandFit {
+  if (columns >= BAND_WIDE) return { date: true, progress: 'long', recap: true, tasks: true, break: 'always', asOf: 'long' }
+  if (columns >= BAND_MEDIUM) return { date: false, progress: 'short', recap: true, tasks: true, break: 'always', asOf: 'short' }
+  if (columns >= BAND_NARROW) return { date: false, progress: null, recap: false, tasks: true, break: 'when-due', asOf: 'short' }
+  return { date: false, progress: null, recap: false, tasks: false, break: 'when-due', asOf: 'short' }
+}
+
+/** "1/3": the progress in five characters. */
+export function shortProgress(today: Today): string {
+  const live = today.order.filter(id => today.tasks[id]?.status !== 'dropped')
+  return `${live.filter(id => today.tasks[id]?.status === 'done').length}/${live.length}`
+}
+
+/**
+ * The automatic pause (D59): after `minutes` idle minutes, counted from the latest of
+ * this session's last answer, the diary's last event (any session's activity) and the
+ * task's start, the active task is paused with the reason `idle`. Nothing to do when it
+ * is off (0), no day is open, no task is active (a waiting one never is), a break runs,
+ * or the active task belongs to another session (D64).
+ */
+export type IdleDue = { kind: 'off' } | { kind: 'wait'; ms: number } | { kind: 'pause'; task: string }
+
+export const IDLE_DEFAULT_MINUTES = 20
+
+export function idleDue(today: Today | undefined, lastAnswerAt: number, minutes: number, nowMs: number, session = ''): IdleDue {
+  if (!today?.open || !today.active || minutes <= 0 || today.break) return { kind: 'off' }
+  const card = today.tasks[today.active]
+  if (!card || card.status !== 'active') return { kind: 'off' } // a waiting task is never the active one (D62)
+  // Only the session working on it pauses it (D64); a task started outside any session, any of them.
+  if (card.session && card.session !== session) return { kind: 'off' }
+  const seen = [lastAnswerAt, today.last_ts ? Date.parse(today.last_ts) : 0, card.since ? Date.parse(card.since) : 0]
+  const due = Math.max(...seen.filter(Number.isFinite)) + minutes * 60000
+  return nowMs >= due ? { kind: 'pause', task: today.active } : { kind: 'wait', ms: due - nowMs }
+}
+
+/** The card fields the pane edits in place; kind, project and priority also go through chat (D61). */
+export const PANE_EDIT_FIELDS = [
+  ['title', 'Title'],
+  ['done_when', 'Done when'],
+  ['first_step', 'First step'],
+  ['perimeter', 'Perimeter'],
+] as const
+
+/** Only what changed, trimmed: the edit the writer receives. Empty start fields are the writer's to refuse. */
+export function cardChanges(card: Card, values: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const [field] of PANE_EDIT_FIELDS) {
+    const v = values[field]
+    if (v !== undefined && v.trim() !== String(card[field] ?? '').trim()) out[field] = v.trim()
+  }
+  return out
 }

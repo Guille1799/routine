@@ -18,7 +18,7 @@ async function text(ui: { drawn: () => Promise<unknown> }): Promise<string> {
     }
   }
   walk(await ui.drawn())
-  return parts.join('')
+  return parts.join(' ').replace(/\s+/g, ' ') // siblings sit a gap apart
 }
 
 test('R17: the band shows date, progress, active task with its time, buttons and the data time', { options: OPTIONS }, async ($, on) => {
@@ -29,7 +29,7 @@ test('R17: the band shows date, progress, active task with its time, buttons and
     const line = await text(ui)
     expect(line).toContain('2026-10-12')
     expect(line).toContain('1 of 3 done')
-    expect(line).toContain('T2 Read section 3 · 41m')
+    expect(line).toContain('T2 Read section 3 41m')
     for (const b of ['[Pause]', '[Done]', '[Break', '[Recap]']) expect(line).toContain(b)
     expect(line).toContain('data 09:41')
     await ui.unmount()
@@ -43,7 +43,7 @@ test('R17: the band draws on the first ask of a pane, before any surface has att
   await $.session.start(START)
   expect(w.registeredTools).toEqual([])
   const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
-  expect(await text(ui)).toContain('T2 Read section 3 · 41m')
+  expect(await text(ui)).toContain('T2 Read section 3 41m')
 })
 
 test('R17: the band re-reads today.json on every draw', { options: OPTIONS }, async ($, on) => {
@@ -53,7 +53,7 @@ test('R17: the band re-reads today.json on every draw', { options: OPTIONS }, as
   w.today = today({ active: null, last_ts: '2026-10-12T09:45:00+02:00' })
   await ui.redraw()
   const line = await text(ui)
-  expect(line).toContain('no active task')
+  expect(line).toContain('T2 Read section 3 · paused') // its own task, as it is now
   expect(line).toContain('data 09:45')
 })
 
@@ -99,7 +99,7 @@ test('R25: a break starts as a pomodoro by default, through the writer', { optio
   await $.session.start(START)
   const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
   await ui.press({ key: 'break' })
-  expect(await text(ui)).toContain('[5 min][15 min][17 min]')
+  expect(await text(ui)).toContain('[5 min] [15 min] [17 min]')
   await ui.press({ key: 'break-0' })
   expect(writes(w)).toEqual([argvOf(C.break_start!)])
 })
@@ -126,26 +126,17 @@ test('R25: at the end of the break, one tap answers the phone question, then a r
   const w = world(on, { today: today({ break: { technique: 'pomodoro', minutes: 5, since: '2026-10-12T09:30:00+02:00' } }) })
   await $.session.start(START)
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
-  expect(await text(ui)).toContain('Break over. Phone during the break? [Yes][No]')
+  expect(await text(ui)).toContain('Break over. Phone during the break? [Yes] [No]')
   await ui.press({ key: 'phone-no' })
   expect(writes(w)).toEqual([argvOf(C.break_end!)])
   expect(w.forks).toHaveLength(1)
   expect(w.logs).toEqual(['Recap: drafted note'])
 })
 
-test('R26: the recap button uses the built-in /recap when this build has one', { options: OPTIONS }, async ($, on) => {
+test('R26: the recap is a fork over this session, never the built-in /recap the engine refuses to a plugin', { options: OPTIONS }, async ($, on) => {
   const w = world(on, { commands: [{ name: 'recap', source: 'builtin' }] })
   await $.session.start(START)
   const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
-  await ui.press({ key: 'recap' })
-  expect(w.ranCommands).toEqual(['recap'])
-  expect(w.forks).toEqual([])
-})
-
-test('R26: without a built-in /recap, the recap is a fork over this session', { options: OPTIONS }, async ($, on) => {
-  const w = world(on, { commands: [{ name: 'recap', source: 'plugin' }] })
-  await $.session.start(START)
-  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
   await ui.press({ key: 'recap' })
   expect(w.ranCommands).toEqual([])
   expect(w.forks).toHaveLength(1)

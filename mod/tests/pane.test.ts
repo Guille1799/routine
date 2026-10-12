@@ -48,7 +48,7 @@ test('R17: the pane lists every task with its mark, card, carried counter and th
     const shown = await text(ui)
     expect(shown).toContain('1 of 3 done · inbox 2 · data 09:41')
     expect(shown).toContain('[x] T1 Answer two mails')
-    expect(shown).toContain('[>] T2 Read section 3 \n[Done]')
+    expect(shown).toContain('[>] T2 Read section 3 · here \n[Done]')
     expect(shown).toContain('done when: notes written')
     expect(shown).toContain('first step: open the pdf')
     expect(shown).toContain('[~] T3 Fix the parser · carried 2x \n[Start]')
