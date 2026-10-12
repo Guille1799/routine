@@ -90,3 +90,39 @@ test('R17: the pane says when there is no data folder', { options: OPTIONS }, as
   const ui = await $.ui.mount({ ...PANE, surface: 'mobile' })
   expect(await text(ui)).toContain('no data folder: D:/routine-data')
 })
+
+const FIRST = 't-20261012-aaaaaa'
+
+test('D57: a finished task offers Reopen, which asks the reason before writing', { options: OPTIONS }, async ($, on) => {
+  const w = world(on)
+  await $.session.start(START)
+  for (const surface of ['terminal', 'desktop'] as const) {
+    w.runs.length = 0
+    const ui = await $.ui.mount({ ...PANE, surface })
+    expect(await ui.find({ key: `reopen-why-${FIRST}` })).toBeUndefined()
+    await ui.press({ key: `reopen-${FIRST}` })
+    await ui.input({ key: `reopen-why-${FIRST}`, text: '  ' })
+    expect(await text(ui)).toContain('Say why first.')
+    expect(writes(w)).toEqual([])
+    await ui.input({ key: `reopen-why-${FIRST}`, text: C.reopen!.data!.why as string })
+    expect(writes(w)).toEqual([argvOf(C.reopen!, FIRST)])
+    expect(await ui.find({ key: `reopen-why-${FIRST}` })).toBeUndefined()
+    await ui.unmount()
+  }
+})
+
+test('D57: a reopen the writer refuses is said in the pane', { options: OPTIONS }, async ($, on) => {
+  world(on, { writerExit: 1 })
+  await $.session.start(START)
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  await ui.press({ key: `reopen-${FIRST}` })
+  await ui.input({ key: `reopen-why-${FIRST}`, text: 'x' })
+  expect(await text(ui)).toContain('refused by the writer')
+})
+
+test('D57: the phone has no text field, so it offers no Reopen', { options: OPTIONS }, async ($, on) => {
+  world(on)
+  await $.session.start(START)
+  const ui = await $.ui.mount({ ...PANE, surface: 'mobile' })
+  expect(await ui.find({ key: `reopen-${FIRST}` })).toBeUndefined()
+})

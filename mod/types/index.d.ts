@@ -13,11 +13,17 @@ export type RoutineForm = {
   error: string | null
 }
 
+/** A finished task the pane is asking a reason to reopen (D57). */
+export type RoutineReopen = { task: string; error: string | null }
+
 declare module 'claude-code' {
   interface PluginState {
     routine: {
       form: RoutineForm | null
       breakPick: boolean
+      /** The date this session last asked to start the day: once per session per day. */
+      dayAsked: string | null
+      reopen: RoutineReopen | null
     }
   }
 }

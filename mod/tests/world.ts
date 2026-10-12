@@ -1,6 +1,7 @@
 // A fake world beneath the mod: today.json, the writer process, the session.
 // The mod under test is the real one; only what lies beneath `$` is stood in.
 import { mock } from 'claude-code/testing'
+import type { MockClock } from 'claude-code/testing'
 import type { On } from 'claude-code'
 
 import type { DoneField, Today, WriterCall } from '../hooks/core'
@@ -70,6 +71,8 @@ export type World = {
   logs: string[]
   toasts: string[]
   opened: string[]
+  /** The mocked clock, to move to another day. */
+  clock: MockClock
 }
 
 /** The argv the mod must send for a contract call, in this world's session. */
@@ -112,9 +115,10 @@ export function world(on: On, over: Partial<World> = {}): World {
     logs: [],
     toasts: [],
     opened: [],
+    clock: undefined as unknown as MockClock,
     ...over,
   }
-  mock.clock(on, { now: NOW })
+  w.clock = mock.clock(on, { now: NOW })
   mock.env(on, {})
   on('session.surfaces', () => ({ value: w.surfaces as never }))
   on('session.id', () => ({ value: SESSION }))

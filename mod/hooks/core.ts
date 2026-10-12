@@ -49,7 +49,7 @@ export type FieldValue = string | boolean
 
 // The writer CLI's actions this mod uses. The CLI spells them with dashes.
 export type WriterAction =
-  | 'start' | 'pause' | 'pause_reason' | 'checkpoint' | 'done' | 'drift_warn' | 'drift_reply'
+  | 'start' | 'pause' | 'pause_reason' | 'checkpoint' | 'done' | 'reopen' | 'drift_warn' | 'drift_reply'
   | 'inbox' | 'said' | 'break_start' | 'break_end' | 'usage'
 
 export type WriterCall = {
@@ -207,8 +207,8 @@ export type TaskRow = {
   doneWhen?: string
   firstStep?: string
   carried: number
-  /** What the row offers: start a pending or paused task, finish the active one. */
-  action: 'start' | 'done' | null
+  /** What the row offers: start a pending or paused task, finish the active one, reopen a finished one (D57). */
+  action: 'start' | 'done' | 'reopen' | null
 }
 
 /** Today's full list for the pane, in today's order (the expanded band). */
@@ -224,7 +224,7 @@ export function taskRows(today: Today): TaskRow[] {
       doneWhen: t?.done_when,
       firstStep: t?.first_step,
       carried: t?.carried ?? 0,
-      action: status === 'active' ? 'done' : status === 'pending' || status === 'paused' ? 'start' : null,
+      action: status === 'active' ? 'done' : status === 'pending' || status === 'paused' ? 'start' : 'reopen',
     }
   })
 }
@@ -330,4 +330,35 @@ export function inboxText(prompt: string): string | undefined {
   const m = /^\/inbox(?:\s+([\s\S]*))?$/.exec(prompt.trim())
   if (!m) return undefined
   return (m[1] ?? '').trim()
+}
+
+/** The local date (YYYY-MM-DD) of a moment; the hooks environment runs on the user's time zone. */
+export function localDate(nowMs: number): string {
+  const d = new Date(nowMs)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+/**
+ * Whether the user has today open: `open`, `none` (no diary, or the last day is closed
+ * and older than today), or `stale` (an older day is still open: /plan-day closes it first).
+ * A day closed today counts as open: the day happened.
+ */
+export type DayStatus = { kind: 'open' } | { kind: 'none'; date: string } | { kind: 'stale'; date: string; openDay: string }
+
+export function dayStatus(today: Today | undefined, date: string): DayStatus {
+  if (!today?.day) return { kind: 'none', date }
+  if (today.day >= date) return { kind: 'open' }
+  if (today.open) return { kind: 'stale', date, openDay: today.day }
+  return { kind: 'none', date }
+}
+
+/** What the model reads when the day is not open: ask once, in one line, whether to plan it. */
+export function planDayContext(status: DayStatus): string | undefined {
+  if (status.kind === 'open') return undefined
+  const lines = [
+    `[routine] No day is open for today (${status.date}). Before anything else, ask the user in ONE short line ` +
+      'whether to start the day with /plan-day; then go on with their message either way. Ask only this once.',
+  ]
+  if (status.kind === 'stale') lines.push(`Day ${status.openDay} is still open: /plan-day closes it first.`)
+  return lines.join(' ')
 }
