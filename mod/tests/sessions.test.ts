@@ -149,3 +149,20 @@ test('D64: only the session working on the active task pauses it for idleness', 
   await w.clock.advance(60 * MIN)
   expect(writes(w).filter(a => a[3] === 'pause')).toEqual([])
 })
+
+test('D64: a session whose task just finished, with no active task and a side task elsewhere, still draws its band', { options: OPTIONS }, async ($, on) => {
+  // The lead session's state on 12-oct: its T9 done, T4 waiting in another session, nothing active.
+  const t = day()
+  t.tasks[T2] = { ...t.tasks[T2]!, status: 'done', session: 'E' }
+  delete t.tasks[T2]!.since
+  t.active = null
+  const w = world(on, { today: t })
+  await $.session.start(START)
+  w.session = 'E'
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const line = await text(await $.ui.mount({ ...band(), surface }))
+    expect(line).toContain("no task in this session · say 'let's do T#'")
+    expect(line).toContain('[Tasks]')
+    expect(line).not.toContain('elsewhere')
+  }
+})
