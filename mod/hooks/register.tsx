@@ -256,7 +256,21 @@ const SESSION_COMMANDS = [
   { name: 'done', description: "Finish this session's task: opens the done row above the prompt" },
   { name: 'wait', description: "Let this session's task (or the one named) run here on its own", argumentHint: '[T#]' },
   { name: 'tasks', description: "Open today's task list" },
+  { name: 'drop', description: "Give up this session's task (or T#); a reason may follow", argumentHint: '[T#] [reason]' },
+  { name: 'close', description: "Close the day; what follows is tomorrow's thing", argumentHint: "[tomorrow's thing]" },
 ] as const
+
+/** close-day's data: tomorrow's thing, when said. */
+function closeData(tomorrow: string | undefined): Record<string, unknown> {
+  return tomorrow?.trim() ? { tomorrow: tomorrow.trim() } : {}
+}
+
+/** What closing says; the writer commits the day when the data folder is a git repository (D69). */
+function closeAnswer(out: WriterOutcome): string {
+  if (!out.ok) return `Close: ${out.error}`
+  const git = out.git as { committed?: boolean } | undefined
+  return `Day closed.${git?.committed ? ' The day is committed.' : ''} Unfinished tasks and inbox items carry to tomorrow; /plan-day sorts them.`
+}
 
 /**
  * The session commands (D64): each acts on THIS session's task and answers in one line, with
@@ -267,6 +281,7 @@ async function sessionCommand($: $, name: string, args: string): Promise<string>
     await $.ui.open({ id: PANE, title: 'Today' })
     return "Today's tasks are open."
   }
+  if (name === 'close') return closeAnswer(await write($, { action: 'close_day', data: closeData(args) }))
   const r = await readToday($)
   if (!r.today) return `routine: ${r.problem}`
   const today = r.today
@@ -278,6 +293,16 @@ async function sessionCommand($: $, name: string, args: string): Promise<string>
     if (!named) return `No task ${args} today.`
     const out = await write($, { action: 'wait', task: named })
     return out.ok ? `${aliasOf(today, named)} runs here on its own (waiting).` : `Wait: ${out.error}`
+  }
+  if (name === 'drop') {
+    // "/drop T4 not needed": a task named first, or this session's; the rest is the reason.
+    const m = /^(t?\d+)(?:\s+([\s\S]*))?$/i.exec(args)
+    const named = m ? resolveTask(today, m[1]) : undefined
+    const target = named ?? own
+    const why = (named ? m?.[2] ?? '' : args).trim()
+    if (!target) return 'No task in this session. Name it: /drop T#.'
+    const out = await write($, { action: 'drop', task: target, data: why ? { note: why } : {} })
+    return out.ok ? `Dropped ${aliasOf(today, target)}.` : `Drop: ${out.error}`
   }
   if (!own || !card) return "No task in this session. Say \"let's do T#\", or /wait T# for a side task."
   if (name === 'pause') {
@@ -388,25 +413,27 @@ async function setup($: $): Promise<void> {
     name: 'routine',
     description:
       "The user's daily routine: one active task at a time. Call it when the user starts, pauses or finishes a task " +
-      '("let\'s do T2", "pause", "T2 can run on its own" = wait, "done", "reopen T1"), when a message drifts outside the active task\'s perimeter, ' +
+      '("let\'s do T2", "pause", "T2 can run on its own" = wait, "done", "drop T4", "reopen T1", "close the day"), when a message drifts outside the active task\'s perimeter, ' +
       'to capture an idea to the inbox, or to keep something the user said. "T2" is the 2nd task of today.',
     inputSchema: {
       type: 'object',
       properties: {
         action: {
           type: 'string',
-          enum: ['start', 'pause', 'wait', 'done', 'reopen', 'edit', 'drift_warn', 'drift_reply', 'inbox', 'said', 'status'],
+          enum: ['start', 'pause', 'wait', 'done', 'drop', 'reopen', 'edit', 'close', 'drift_warn', 'drift_reply', 'inbox', 'said', 'status'],
         },
         task: { type: 'string', description: 'T1, T2... or the task id; default: the active task' },
-        note: { type: 'string', description: 'pause/done: what was done, where it stopped, next step (you draft it)' },
+        note: { type: 'string', description: 'done: what was done, where it stopped, next step, what I take away (you draft it)' },
         fields: { type: 'object', description: 'done: the configured fields, by id' },
         changes: {
           type: 'object',
-          description: 'edit: the card fields to change: title, done_when, first_step, perimeter, kind, project, priority (true/false). The three start fields cannot be emptied.',
+          description: 'edit: the card fields to change: title, done_when, first_step, perimeter, kind, project, priority (true/false), technique ("pomodoro 25/5", "50/10", "free" or "none"). The three start fields cannot be emptied.',
         },
         message: { type: 'string', description: 'drift_warn: a short summary of the drifting message' },
         reply: { type: 'string', enum: ['back', 'continue'], description: 'drift_reply' },
-        why: { type: 'string', description: 'drift_reply continue, or reopen: the reason the user gave' },
+        why: { type: 'string', description: 'drift_reply continue, reopen, or drop: the reason the user gave' },
+        reason: { type: 'string', enum: [...PAUSE_REASONS], description: 'pause: only if the user said why' },
+        tomorrow: { type: 'string', description: "close: tomorrow's thing, in one sentence, if the user said it" },
         text: { type: 'string', description: 'inbox / said: the text' },
         kind: { type: 'string', description: 'said: reaction | answer | thought | statement' },
       },
@@ -550,6 +577,8 @@ export const register: Register = (on, options) => {
   on('command.run', { command: 'done' }, async ($, e) => ({ text: await sessionCommand($, 'done', e.args.trim()) }))
   on('command.run', { command: 'wait' }, async ($, e) => ({ text: await sessionCommand($, 'wait', e.args.trim()) }))
   on('command.run', { command: 'tasks' }, async ($, e) => ({ text: await sessionCommand($, 'tasks', e.args.trim()) }))
+  on('command.run', { command: 'drop' }, async ($, e) => ({ text: await sessionCommand($, 'drop', e.args.trim()) }))
+  on('command.run', { command: 'close' }, async ($, e) => ({ text: await sessionCommand($, 'close', e.args.trim()) }))
 
   on('prompt.submit', async ($, e, next) => {
     if (!(await isInteractive($))) return next(e)
@@ -623,10 +652,26 @@ export const register: Register = (on, options) => {
         ].filter(Boolean).join('\n'))
       }
       case 'pause': {
+        // A pause is only a pause (D56), from chat too (D72): no note; a reason only if one was said.
         if (!task) return { deny: 'routine: no task in this session to pause' }
+        const reason = s('reason')?.trim().toLowerCase()
+        if (reason && !(PAUSE_REASONS as readonly string[]).includes(reason)) {
+          return { deny: `routine: a pause reason is one of ${PAUSE_REASONS.join(', ')}; or give none` }
+        }
+        const data: Record<string, unknown> = reason ? { reason } : {}
         const note = s('note')?.trim()
-        if (!note) return { deny: 'routine: a pause needs a note: what was done, where it stopped, the next step' }
-        return done(await write($, { action: 'pause', task, data: { note } }), `Paused ${aliasOf(today, task)}.`)
+        if (note) data.note = note
+        return done(await write($, { action: 'pause', task, data }), `Paused ${aliasOf(today, task)}${reason ? `: ${reason}` : ''}.`)
+      }
+      case 'drop': {
+        // Giving a task up: this session's, or the one named; the reason, if any, is its note.
+        if (!task) return { deny: `routine: which task? Today: ${taskList(today)}` }
+        const why = s('why')?.trim()
+        return done(await write($, { action: 'drop', task, data: why ? { note: why } : {} }), `Dropped ${aliasOf(today, task)}.`)
+      }
+      case 'close': {
+        const out = await write($, { action: 'close_day', data: closeData(s('tomorrow')) })
+        return done(out, closeAnswer(out))
       }
       case 'wait': {
         // D62/D64: a session works on it alone; from pending it starts here as a side task.
