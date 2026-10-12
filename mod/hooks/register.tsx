@@ -13,7 +13,8 @@ import {
   askFor,
   band,
   buttonLabel,
-  fitBand,
+  cut,
+  fitRows,
   cardChanges,
   PANE_EDIT_FIELDS,
   clockOf,
@@ -718,7 +719,7 @@ export const register: Register = (on, options) => {
       )
     }
 
-    // The line is laid out against its real width (fitBand): the title gives way first, the
+    // Two rows laid out against their real width (fitRows): the title gives way first, the
     // phase in words and Tasks never. Two cells spare for what the estimate cannot know.
     const columns = Math.max(20, e.props.bodyColumns - 2)
     const rh = b.task?.rhythm
@@ -756,7 +757,8 @@ export const register: Register = (on, options) => {
     }
     actions.push({ key: 'tasks', label: 'Tasks', hotkey: 't', keep: true, onPress: () => void $.ui.open({ id: PANE, title: 'Today' }) })
     const phase = phaseText()
-    const lay = fitBand(columns, {
+    const elsewhere = b.elsewhere ? `now: ${b.elsewhere.alias} ${cut(b.elsewhere.title, 24)} elsewhere` : undefined
+    const lay = fitRows(columns, {
       stale: day.kind === 'stale' ? `${day.openDay} still open · /plan-day` : undefined,
       date: b.date,
       progress: b.progress,
@@ -764,34 +766,39 @@ export const register: Register = (on, options) => {
       title: b.break?.isOver ? '' : own ? `${own.alias} ${own.title}` : 'no task in this session',
       phase,
       buttons: actions,
-      extra: b.elsewhere ? `now: ${b.elsewhere.alias} elsewhere` : undefined,
+      extra: elsewhere,
       asOf: `data ${b.asOf}`,
       asOfShort: b.asOf,
     })
-    const line = (
+    // Row 1: where this session is. Row 2: what it can do, every button with its key.
+    const info = (
       <Box key="line" columnGap={1} flexWrap="nowrap">
         {day.kind === 'stale' ? <Text color="yellow">{`${day.openDay} still open · /plan-day`}</Text> : null}
-        {lay.date ? <Text dimColor>{b.date}</Text> : null}
-        {lay.progress ? <Text dimColor>{lay.progress === 'long' ? b.progress : shortProgress(r.today)}</Text> : null}
-        {lay.date || lay.progress ? <Text dimColor>{'·'}</Text> : null}
-        {lay.title ? <Text bold={!!b.task} dimColor={!b.task && !b.waiting}>{lay.title}</Text> : null}
-        {lay.title && phase ? <Text dimColor>{'·'}</Text> : null}
+        {lay.info.date ? <Text dimColor>{b.date}</Text> : null}
+        {lay.info.progress ? <Text dimColor>{lay.info.progress === 'long' ? b.progress : shortProgress(r.today)}</Text> : null}
+        {lay.info.date || lay.info.progress ? <Text dimColor>{'·'}</Text> : null}
+        {lay.info.title ? <Text bold={!!b.task} dimColor={!b.task && !b.waiting}>{lay.info.title}</Text> : null}
+        {lay.info.title && phase ? <Text dimColor>{'·'}</Text> : null}
         {phase ? <Text bold={!!b.task && !due} color={due ? 'yellow' : undefined} dimColor={!!b.resume || (!own && !b.break)}>{phase}</Text> : null}
-        {actions.filter(a => !lay.dropped.includes(a.key)).map(a => (
+        {lay.info.extra && elsewhere ? <Text dimColor>{elsewhere}</Text> : null}
+      </Box>
+    )
+    const buttons = (
+      <Box key="actions" columnGap={1} flexWrap="nowrap">
+        {actions.filter(a => !lay.actions.dropped.includes(a.key)).map(a => (
           <Button
             key={a.key}
-            label={buttonLabel(a, lay.compact)}
-            {...(a.hotkey && !(lay.compact && !a.keep) ? { hotkey: a.hotkey } : {})}
+            label={buttonLabel(a, lay.actions.compact)}
+            {...(a.hotkey && !(lay.actions.compact && !a.keep) ? { hotkey: a.hotkey } : {})}
             {...(a.variant ? { variant: a.variant } : {})}
             onPress={a.onPress}
           />
         ))}
-        {lay.extra && b.elsewhere ? <Text dimColor>{`now: ${b.elsewhere.alias} elsewhere`}</Text> : null}
-        <Text dimColor>{lay.asOf === 'long' ? `data ${b.asOf}` : b.asOf}</Text>
+        <Text dimColor>{lay.actions.asOf === 'long' ? `data ${b.asOf}` : b.asOf}</Text>
       </Box>
     )
 
-    const rows = [line]
+    const rows = [info, buttons]
     if (picking && !b.break) {
       const suggested = b.task?.rhythm?.rest || BREAK_MINUTES[0]
       const technique = b.task?.rhythm?.technique ?? 'none'

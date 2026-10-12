@@ -30,12 +30,12 @@ function withPausedAndCarried() {
   return t
 }
 
-test('R17: the Tasks button opens the pane, and the band stays one line', { options: OPTIONS }, async ($, on) => {
+test('R17: the Tasks button opens the pane, and the band is two rows: where it is, what it can do', { options: OPTIONS }, async ($, on) => {
   const w = world(on)
   await $.session.start(START)
   const band = await $.ui.mount({ ...BAND, surface: 'desktop' })
   const tree = (await band.drawn()) as { children?: unknown[] }
-  expect(tree.children).toHaveLength(1)
+  expect(tree.children).toHaveLength(2)
   await band.press({ key: 'tasks' })
   expect(w.opened).toEqual(['routine-tasks'])
 })

@@ -1,8 +1,8 @@
 # Manual
 
 How to use the routine, from install to the end of a day. It describes what the code does
-today. `tests/test_manual.py` fails if a CLI action, a tool action, a slash command, a done
-field kind or a setting exists in the code but not here, so this file cannot silently fall
+today. `tests/test_manual.py` fails if a CLI action or option, an install command, a tool
+action, a slash command, a done field kind or a setting exists in the code but not here, so this file cannot silently fall
 behind (D71).
 
 ## What the routine is
@@ -18,7 +18,7 @@ Four pieces work together:
 
 | Piece | What it is | Where |
 |---|---|---|
-| The writer | a command line, `python -m routine`, the only thing that writes your diary | `routine/` |
+| The writer | a command line, `python -m routine`, the only thing that writes your diary. It also sorts items at the close, keeps the library and computes the day rate | `routine/` |
 | The morning skill | `/plan-day`: plans the day with you, one question at a time | `skills/plan-day/` |
 | The inventory task | a Windows scheduled task that prepares the morning sheet | `bin/` |
 | The mod | the band, the footer chip, the Tasks pane, the `routine` tool and the slash commands inside Claude Code | `mod/` |
@@ -26,6 +26,31 @@ Four pieces work together:
 ## Install
 
 You need Python 3.11 or newer and Claude Code.
+
+**Try it first with a demo.** This makes a new data folder outside the repository, copies
+the example configuration into it, and writes one demo day through the real writer:
+
+```bash
+python -m routine.install demo ~/routine-demo
+```
+
+Point `ROUTINE_DATA_DIR` at it and run `python -m routine view`. To remove it:
+
+```bash
+python -m routine.install uninstall --data-dir ~/routine-demo --dry-run
+```
+
+Without `--dry-run`, `uninstall` removes the folder only if it carries the demo mark
+(`.routine-demo`); your own data folder is never removed. **It also removes the
+`routine-inventory` scheduled task** (`--task-name` names another one), so after a demo on a
+machine where you use the routine for real, register the task again. Look at the dry run first.
+
+| Command | Options |
+|---|---|
+| `demo <folder>` | `--day`: the date of the demo day (default today). The folder must be new or empty |
+| `uninstall` | `--data-dir`: the demo folder to remove · `--task-name`: the scheduled task (default `routine-inventory`) · `--dry-run`: say what would go, remove nothing |
+
+For real use:
 
 1. **Make a data folder outside this repository**, for example `~/routine-data`. The writer
    refuses a data folder inside the repository.
@@ -39,7 +64,10 @@ You need Python 3.11 or newer and Claude Code.
    mkdir -p ~/routine-data/config && cp examples/data/config/*.toml ~/routine-data/config/
    ```
 
-   Then edit `channels.toml` so it points at your own lists (see [Channels](#channels-channelstoml)).
+   Then edit `channels.toml` so it points at your own lists (see [Channels](#channels-channelstoml)),
+   and `projects.toml` with your projects (see [Projects](#projects-projectstoml)).
+   Optional: make the data folder a git repository (`git init`) and every close commits the
+   day there (see [The close](#the-close-sorting-library-and-the-day-rate)).
 4. **Link the morning skill** into your skills folder. Link, do not copy: the skill finds the
    CLI two folders above itself.
 
@@ -98,16 +126,19 @@ code 2 means the data folder was not found.
    optional. `Resume` starts it again. After 20 idle minutes the active task pauses by itself.
 6. **Done.** `Done` (or `/done`, or "done" in chat) opens the done row: a few buttons and a
    note the session drafts for you. Correct it and press `Save done`.
-7. **Close.** There is no close button yet. The next morning `/plan-day` closes the day for
-   you, or you close it yourself:
+7. **Close.** Send each inbox item and each unfinished task you do not want tomorrow to its
+   one place with `sort` (try `--dry-run` first), then close the day:
 
    ```bash
    python -m routine close-day --data '{"tomorrow": "finish the parser"}'
    ```
 
-   Closing pauses the active task and ends a running break. Unfinished tasks and inbox items
-   move to the next day when it opens, with the same id and a counter of how many days they
-   carried. Skipping the close loses nothing.
+   There is no close button or close skill yet: you run these yourself, or ask a session to.
+   If you do not close, the next morning `/plan-day` closes the day for you. Closing pauses
+   the active task, ends a running break and, when the data folder is a git repository,
+   commits the day. Unfinished tasks and inbox items move to the next day when it opens, with
+   the same id and a counter of how many days they carried. Skipping the close loses nothing.
+   See [The close](#the-close-sorting-library-and-the-day-rate).
 
 ## The CLI
 
@@ -115,13 +146,19 @@ Every change goes through one command line, the single writer. The mod, the skil
 all use it; nobody edits the diary by hand.
 
 ```
-python -m routine <action> [--task ID] [--data JSON] [--session ID] [--cwd PATH] [--day YYYY-MM-DD]
+python -m routine <action> [--task ID] [--data JSON] [--session ID] [--cwd PATH] [--day YYYY-MM-DD] [--since YYYY-MM-DD] [--dry-run]
 ```
 
-- `--data` is a JSON object with the action's fields (default `{}`).
-- `--task` is the task's stable id (`t-20261012-a1b2c3`). `T2` works in chat, not here.
-- `--session` and `--cwd` say which session wrote it; the mod fills them in.
-- `--day` is only for `open-day` and `inventory`, to use another date (tests, demos).
+| Option | What |
+|---|---|
+| `--data` | a JSON object with the action's fields (default `{}`) |
+| `--task` | the task's stable id (`t-20261012-a1b2c3`). `T2` works in chat, not here |
+| `--session` | which session wrote it; the mod fills it in |
+| `--cwd` | the folder that session works in; the mod fills it in |
+| `--day` | for `open-day`, `inventory`, `library` and `stats`: the date to use as today (tests, demos) |
+| `--since` | for `stats`: count from this day instead of the first day in the diary |
+| `--dry-run` | for `sort`: show where the item would go and the exact command; write nothing |
+| `--help` | the list of actions and options |
 
 The answer is JSON on stdout. **Exit codes:** `0` written · `1` refused, nothing written
 (the error says why) · `2` no data folder.
@@ -145,7 +182,7 @@ In `view` each task has a mark: `[ ]` pending, `[>]` active, `[~]` paused, `[…
 | Action | What it does | Example |
 |---|---|---|
 | `open-day` | opens today; refused while another day is open. Carries over unfinished tasks and inbox items | `python -m routine open-day --data '{"mode": "normal", "hours": 4, "when": "10:00-14:00"}'` |
-| `close-day` | closes the day; pauses the active task and ends a break | `python -m routine close-day --data '{"tomorrow": "finish the parser"}'` |
+| `close-day` | closes the day; pauses the active task, ends a break, and commits the day when the data folder is a git repository (the answer's `git` says what happened) | `python -m routine close-day --data '{"tomorrow": "finish the parser"}'` |
 | `carry` | one unfinished task moved into the new day, with its card and a counter | never typed: `open-day` writes it |
 
 ### Tasks
@@ -160,7 +197,7 @@ In `view` each task has a mark: `[ ]` pending, `[>]` active, `[~]` paused, `[…
 | `checkpoint` | a note for whoever picks the task up: what was done, where it stopped, the next step | `python -m routine checkpoint --task t-20261012-a1b2c3 --data '{"note": "read 3.1; stopped at 3.2; next: the figure"}'` |
 | `wait` | a session works on the task alone: it leaves the active slot free and is never auto-paused. Works from pending, active or paused | `python -m routine wait --task t-20261012-a1b2c3` |
 | `done` | finishes the task with the done fields and the note. A task never started is marked `unstarted` | `python -m routine done --task t-20261012-a1b2c3 --data '{"fields": {"rating": "🔥", "drifted": false, "note": "notes written"}, "note": "notes written"}'` |
-| `drop` | gives the task up. Optional `note` | `python -m routine drop --task t-20261012-a1b2c3 --data '{"note": "not needed after all"}'` |
+| `drop` | gives the task up. Optional `note`; a priority dropped with a note makes the day a justified exception. Sending a task to a ledger is `sort`, not `drop` | `python -m routine drop --task t-20261012-a1b2c3 --data '{"note": "not needed after all"}'` |
 | `reopen` | brings a done or dropped task back to pending; needs `why` | `python -m routine reopen --task t-20261012-a1b2c3 --data '{"why": "one more check"}'` |
 
 Done and dropped are final: `start`, `done` and `drop` on them are refused until `reopen`.
@@ -171,7 +208,6 @@ The CLI does not check the done fields against `done_fields.toml`; the mod does.
 | Action | What it does | Example |
 |---|---|---|
 | `inbox` | captures an idea | `python -m routine inbox --data '{"text": "buy milk"}'` |
-| `inbox-sorted` | takes an item out of the inbox and says where it went | `python -m routine inbox-sorted --data '{"item": "i-df8d44fd", "to": "library"}'` |
 | `said` | keeps something you said, for reuse later. `kind` is free, but `drift_reply`, `mode` and `attention` are refused: focus data is never kept as reusable text | `python -m routine said --data '{"text": "this clicked for me", "kind": "reaction"}'` |
 | `drift-warn` | logs a warning that a message left the task's perimeter. One per episode | `python -m routine drift-warn --task t-20261012-a1b2c3 --data '{"message": "asked about the weekend"}'` |
 | `drift-reply` | the answer: `back`, or `continue` with `why` | `python -m routine drift-reply --task t-20261012-a1b2c3 --data '{"action": "continue", "why": "it is related after all"}'` |
@@ -182,21 +218,42 @@ The CLI does not check the done fields against `done_fields.toml`; the mod does.
 `drift-warn`, `drift-reply`, `break-start`, `break-end` and `usage` are normally written by
 the mod; you rarely type them.
 
+### The close, the library and the rate
+
+| Action | What it does | Example |
+|---|---|---|
+| `sort` | sends one inbox item, unfinished task, held item or library item to its one place (see [The close](#the-close-sorting-library-and-the-day-rate)) | `python -m routine sort --data '{"item": "i-df8d44fd", "drawer": "to_read"}' --dry-run` |
+| `library` | prints the library, the holding list, and `offer`: the one item untouched for 5 weeks this close asks about | `python -m routine library` |
+| `library-touch` | you used a library item: its 5 weeks start again | `python -m routine library-touch --data '{"item": "i-df8d44fd"}'` |
+| `library-decide` | the decision on an expired item: `keep` or `drop` (`promote` goes through `sort`) | `python -m routine library-decide --data '{"item": "i-df8d44fd", "decision": "keep"}'` |
+| `exception` | a written exception for a day, today or earlier: the day leaves the rate | `python -m routine exception --data '{"for": "2026-10-10", "why": "travelling"}'` |
+| `stats` | the fulfilled-day rate and the list of days | `python -m routine stats --since 2026-10-01` |
+
+`sort` writes the events `inbox_sorted` (an inbox item), `held_sorted` (a held item sent on),
+`drop` with `sent_to` (a task) or `library_decide` with `promote`. They are not actions of
+their own: only `sort` runs the project's entry command first, so only `sort` may write them.
+
 ## The band
 
-The band sits above the prompt. It shows **this session's** task, never another session's:
+The band sits above the prompt, in two rows. It shows **this session's** task, never another
+session's.
 
 ```
-2026-10-12 · 1 of 4 done · T2 Notes on section 3 · Pomodoro · work 18/25  [Pause] [Done] [Wait] [Break] [Recap] [Tasks]  data 09:41
+2026-10-12 · 1 of 4 done · T2 Notes on section 3 · Pomodoro · work 18/25
+[Pause] [Done] [Wait] [Break] [Recap] [Tasks]  data 09:41
 ```
+
+**Row 1, where this session is:**
 
 - the date and the progress (`1 of 4 done`; dropped tasks do not count);
 - the task as `T2 <title>`, or `no task in this session`;
 - the phase in words: `Pomodoro · work 18/25`, `free · 47m working`, just `47m` with no timer,
   `time for a 5-min break`, `break 3/5 left`, `Break over. Phone during the break?`, `paused`,
   `waiting since 09:45`, or `say 'let's do T#'`;
-- `now: T9 elsewhere`, dimmed, when the day's active task belongs to another session;
-- `data 09:41`: the time of the last event it read, so you know how fresh it is.
+- `now: T9 <title> elsewhere`, dimmed, when the day's active task belongs to another session.
+
+**Row 2, what it can do:** the buttons, each with its key, and `data 09:41`: the time of the
+last event the band read, so you know how fresh it is.
 
 ### Buttons and hotkeys
 
@@ -213,9 +270,11 @@ The band sits above the prompt. It shows **this session's** task, never another 
 | `End break` | | during a break | ends it early |
 | `Yes` / `No` | | the break is over | answers "Phone during the break?", then a recap |
 
-When the window is narrow the band shortens itself: the title is cut first, then the other
-session's task and the date go, then labels shrink to their key (`[P]`), then `Wait`,
-`Break` and `Recap` go (they are in the Tasks pane too). The phase and `Tasks` always stay.
+Each row fits its own width. In row 1 the other session's task goes first, then the date,
+then the title is cut with an ellipsis, then the progress; the phase never goes. In row 2 the
+data time shortens, then in narrow panes the labels shrink to their key (`[P] [D] [W]`), and
+only in very narrow panes do `Wait`, `Break` and `Recap` go (they are in the Tasks pane too).
+`Tasks` always stays.
 
 ### Rows that open under the band
 
@@ -310,6 +369,84 @@ They act on **this session's** task and answer in one line, without a model turn
 
 `/recap` is Claude Code's own command; you can type it, but the band's `Recap` button uses its
 own question instead.
+
+## The close: sorting, library and the day rate
+
+### Sorting: one place per item
+
+At the close each inbox item, and each unfinished task you do not want tomorrow, goes to
+**one** place. `sort` decides by the purpose rule:
+
+| You give | It is | It goes to |
+|---|---|---|
+| a `project` that has an `entry` command | a task | that project's ledger: `sort` runs the entry command, and writes only if it exits 0 |
+| a `project` with no `entry` | a task | the **holding list**, dated, until the project has one |
+| a `date` and no project | a task | the holding list (there is no ledger to send it to) |
+| a `drawer`, and no project or date (inbox items only) | content | the **library**: `to_read`, `to_watch`, `open_topics` or `ideas` |
+
+What you sort is one of: `"item"` (an inbox item id), `--task` (an unfinished task, which
+leaves the day as dropped, with where it went), `"held"` (a held item) or `"library"` (a
+library item being promoted). `title` and `what` fill the entry command; they default to the
+item's text.
+
+```bash
+python -m routine sort --task t-20261012-a1b2c3 --data '{"project": "thesis"}' --dry-run
+```
+
+**Always try `--dry-run` first**: it prints the place and, for a ledger, the exact `command`,
+and writes nothing. Then run the same line without it. A command that fails writes nothing
+and the item stays where it was. A project's entry command is never run directly: `sort`
+runs it and records the result. The morning skill does the same when you move one of
+yesterday's tasks to a ledger.
+
+### The holding list
+
+Items with a purpose whose project has no entry command yet. They stay there, dated, in
+`<data>/holding/holding.md`. Once the project has an `entry`, send each one on:
+
+```bash
+python -m routine sort --data '{"held": "t-20261012-a1b2c3", "project": "thesis"}'
+```
+
+### The library
+
+Content without a purpose, in four drawers, viewed in `<data>/library/`. Each item keeps the
+day it came in and the day it was last touched (`library-touch`). An item untouched for **5
+weeks** asks for a decision, **one per close**: `python -m routine library` shows it as
+`offer`. Answer with `library-decide` (`keep` restarts its 5 weeks, `drop` removes it), or
+promote it with `sort` and a project or date:
+
+```bash
+python -m routine sort --data '{"library": "i-df8d44fd", "project": "thesis"}'
+```
+
+### The day commit
+
+When the data folder is a git repository, `close-day` commits `diary/` and
+`state/today.json` there with the message `routine: day <date> closed`. It never commits
+`config/`. When the folder is not a repository, or nothing changed, the answer's `git` says
+it skipped and why. A failed commit never undoes the close.
+
+### The day rate
+
+A day is **fulfilled** when its priority is done and the day is closed. The routine works if
+**75 %** of counted days are fulfilled.
+
+```bash
+python -m routine stats
+```
+
+- Counted days are every calendar day from the first day in the diary (or `--since`) to
+  today. Today shows as `in progress` until it is closed.
+- A day not opened, not closed, with no priority, or with the priority not done counts as
+  **not fulfilled**.
+- A **justified exception** leaves the rate, neither fulfilled nor failed: a day whose
+  priority was dropped with a reason (`drop` with a note), or a day with a written
+  `exception`. A priority sent to a ledger or the holding list was postponed, not an
+  exception.
+
+The answer has the counts, the rate, a one-line `summary` and every day with its result and
+why.
 
 ## Breaks and techniques
 
@@ -430,8 +567,23 @@ old = true
 - `old = true` lets the channel's oldest items be offered as the two old items of the day.
 - A channel that cannot be read shows as an error, never as an empty list.
 
-`projects.toml` gives each project the command that adds an item to its ledger. The morning
-skill uses it when you move an unfinished task to a project's ledger.
+## Projects (projects.toml)
+
+`<data>/config/projects.toml` lists your projects and how to add an item to each one's
+ledger:
+
+```toml
+[[project]]
+id = "example"
+path = "~/projects/example"
+entry = "python bin/add.py {title} --what {what}"
+```
+
+- `entry` is optional. A project without one is not a valid destination: its items go to the
+  holding list.
+- `entry` may use `{title}`, `{what}`, `{date}` and `{project}`; anything else in braces is
+  refused when the file is read. Each value becomes one argument; there is no shell.
+- The command runs in `path`. A relative program path (`bin/add.py`) is taken inside `path`.
 
 ## Where your data lives
 
@@ -442,10 +594,13 @@ Everything is in your data folder, outside the repository:
 ├── config/     channels.toml · projects.toml · done_fields.toml · routine.toml · private_terms.txt
 ├── diary/      YYYY-MM/YYYY-MM-DD.jsonl   one event per line, append-only: the only truth
 ├── state/      today.json (rebuilt after every write) · .writer.lock
-└── inventory/  YYYY-MM-DD.json · seen.json · task.log
+├── inventory/  YYYY-MM-DD.json · seen.json · task.log
+├── library/    to_read.md · to_watch.md · open_topics.md · ideas.md   (views)
+└── holding/    holding.md                                            (view)
 ```
 
-The diary is the source; `today.json` and `view` are computed from it.
+The diary is the source; `today.json`, `view`, the library and the holding list are computed
+from it. Never edit the views by hand: the writer rewrites them.
 
 **What is never public.** The code is meant to be public; your data never enters it:
 
@@ -457,13 +612,12 @@ The diary is the source; `today.json` and `view` are computed from it.
 
 ## Not built yet
 
-- A close button or command in the mod; closing is done by `/plan-day` the next morning or
-  by `close-day`.
-- Sorting the inbox at the close into project ledgers, a library or a holding list.
-- The fulfilled-day rate, an installer, and a language check.
+- A guided close: no close button or command in the mod and no close skill. You sort and
+  close with the CLI, or ask a session to; `/plan-day` closes a forgotten day the next morning.
+- A check that the product text is all in English.
 
 ## Keeping this manual current
 
-`tests/test_manual.py` reads the lists from the code (the writer's actions, the mod's tool
-actions and slash commands, the done field kinds, the settings) and fails if one is missing
-here. When you add one, add it to this manual in the same commit.
+`tests/test_manual.py` reads the lists from the code (the writer's actions, options and
+event types, the install commands, the mod's tool actions and slash commands, the done field
+kinds, the settings) and fails if one is missing here. When you add one, add it to this manual in the same commit.

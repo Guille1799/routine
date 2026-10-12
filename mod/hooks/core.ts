@@ -548,7 +548,7 @@ export function sessionChip(today: Today | undefined, session: string, nowMs: nu
 }
 
 /**
- * The band line at its real width (G, 2026-10-12: the buttons ran off the edge and a bare
+ * The band at its real width (G, 2026-10-12: the buttons ran off the edge and a bare
  * "19/25" said nothing). Each stage gives way a little more until the line fits: first the
  * task title is cut with an ellipsis, then the other session's task, the date, the long
  * forms, then the button labels shrink to their key, then the secondary buttons (also in the
@@ -572,18 +572,27 @@ export type BandParts = {
   asOfShort: string
 }
 
-export type BandLayout = {
-  date: boolean
-  progress: 'long' | 'short' | null
-  extra: boolean
-  asOf: 'long' | 'short'
-  /** Labels shrunk to their key ("P"); a kept button keeps its label. */
-  compact: boolean
-  /** Buttons left out, by key. */
-  dropped: string[]
-  title: string
-  /** The estimated width of the line as laid out. */
-  width: number
+/**
+ * The band in two rows (G, 2026-10-12: one line ran off to the right). Row 1 says where the
+ * session is: progress, the task, the phase in words, the other session's task. Row 2 holds
+ * every button with its label and the data time. Each row is fitted to the width on its own.
+ */
+export type BandRows = {
+  info: {
+    date: boolean
+    progress: 'long' | 'short' | null
+    extra: boolean
+    title: string
+    width: number
+  }
+  actions: {
+    asOf: 'long' | 'short'
+    /** Labels shrunk to their key ("P"); a kept button keeps its label. */
+    compact: boolean
+    /** Buttons left out, by key (only in very narrow panes; they are in the Tasks pane too). */
+    dropped: string[]
+    width: number
+  }
 }
 
 /** Room a button takes beside its label: padding, and the hotkey Desktop draws after it. */
@@ -596,46 +605,63 @@ export function buttonLabel(b: BandButton, compact: boolean): string {
 }
 
 export function cut(text: string, max: number): string {
-  return text.length <= max ? text : `${text.slice(0, Math.max(1, max - 1)).trimEnd()}\u2026`
+  return text.length <= max ? text : `${text.slice(0, Math.max(1, max - 1)).trimEnd()}…`
 }
 
-export function fitBand(columns: number, p: BandParts): BandLayout {
-  const stages: Omit<BandLayout, 'title' | 'width'>[] = []
-  let s: Omit<BandLayout, 'title' | 'width'> = { date: true, progress: 'long', extra: true, asOf: 'long', compact: false, dropped: [] }
-  stages.push(s)
-  s = { ...s, extra: false }; stages.push(s)
-  s = { ...s, date: false }; stages.push(s)
-  s = { ...s, progress: 'short', asOf: 'short' }; stages.push(s)
-  s = { ...s, compact: true }; stages.push(s)
-  s = { ...s, dropped: p.buttons.filter(b => b.secondary).map(b => b.key) }; stages.push(s)
-  s = { ...s, progress: null }; stages.push(s)
+/** Texts a gap apart: their lengths plus one cell between each two. */
+function lineWidth(texts: (string | undefined)[]): number {
+  const shown = texts.filter((t): t is string => !!t)
+  return shown.reduce((n, t) => n + t.length, 0) + Math.max(0, shown.length - 1)
+}
 
-  const fixedWidth = (st: Omit<BandLayout, 'title' | 'width'>): number => {
-    const texts = [
-      p.stale,
-      st.date ? p.date : undefined,
-      st.progress === 'long' ? p.progress : st.progress === 'short' ? p.progressShort : undefined,
-      st.date || st.progress ? '\u00b7' : undefined,
-      p.title && p.phase ? '\u00b7' : undefined,
-      p.phase,
-      st.extra ? p.extra : undefined,
-      st.asOf === 'long' ? p.asOf : p.asOfShort,
-    ].filter((t): t is string => !!t)
-    const buttons = p.buttons.filter(b => !st.dropped.includes(b.key))
-    const items = texts.length + buttons.length + 1 // + the title
-    return texts.reduce((n, t) => n + t.length, 0)
-      + buttons.reduce((n, b) => n + buttonLabel(b, st.compact).length + BUTTON_CHROME, 0)
-      + (items - 1) // one gap between items
-  }
-
-  for (const [n, st] of stages.entries()) {
-    const room = columns - fixedWidth(st)
-    const isLast = n === stages.length - 1
-    // The first stage keeps the whole title: the other session's task goes before it is cut.
-    if (room >= (n === 0 ? p.title.length : Math.min(p.title.length, TITLE_MIN)) || isLast) {
-      const title = cut(p.title, Math.max(isLast ? TITLE_FLOOR : TITLE_MIN, Math.min(p.title.length, room)))
-      return { ...st, title, width: fixedWidth(st) + title.length }
+export function fitRows(columns: number, p: BandParts): BandRows {
+  // Row 1: the other session's task goes first, then the date, then the long progress; the
+  // title is cut (with an ellipsis) before the progress goes; the phase never does.
+  type Info = Omit<BandRows['info'], 'title' | 'width'>
+  const infoStages: Info[] = [
+    { date: true, progress: 'long', extra: true },
+    { date: true, progress: 'long', extra: false },
+    { date: false, progress: 'long', extra: false },
+    { date: false, progress: 'short', extra: false },
+    { date: false, progress: null, extra: false },
+  ]
+  const infoWidth = (st: Info, title: string) => lineWidth([
+    p.stale,
+    st.date ? p.date : undefined,
+    st.progress === 'long' ? p.progress : st.progress === 'short' ? p.progressShort : undefined,
+    st.date || st.progress ? '·' : undefined,
+    title,
+    title && p.phase ? '·' : undefined,
+    p.phase,
+    st.extra ? p.extra : undefined,
+  ])
+  let info: BandRows['info'] | undefined
+  for (const [n, st] of infoStages.entries()) {
+    // Everything but the title: measured with a one-cell stand-in, so its gap and dot count.
+    const room = p.title ? columns - (infoWidth(st, 'x') - 1) : columns
+    const isLast = n === infoStages.length - 1
+    const need = n < 3 ? p.title.length : Math.min(p.title.length, TITLE_MIN)
+    if (room >= need || isLast) {
+      const title = cut(p.title, Math.max(isLast ? TITLE_FLOOR : Math.min(p.title.length, TITLE_MIN), Math.min(p.title.length, room)))
+      info = { ...st, title, width: infoWidth(st, title) }
+      break
     }
   }
-  throw new Error('unreachable')
+
+  // Row 2: every button with its label; then the bare data time, then the labels shrink to
+  // their key, and only then do the secondary buttons go. Tasks and the kept ones never do.
+  type Actions = Omit<BandRows['actions'], 'width'>
+  const actionStages: Actions[] = [
+    { asOf: 'long', compact: false, dropped: [] },
+    { asOf: 'short', compact: false, dropped: [] },
+    { asOf: 'short', compact: true, dropped: [] },
+    { asOf: 'short', compact: true, dropped: p.buttons.filter(b => b.secondary).map(b => b.key) },
+  ]
+  const actionsWidth = (st: Actions) => {
+    const buttons = p.buttons.filter(b => !st.dropped.includes(b.key))
+    const asOf = st.asOf === 'long' ? p.asOf : p.asOfShort
+    return buttons.reduce((n, b) => n + buttonLabel(b, st.compact).length + BUTTON_CHROME, 0) + buttons.length + asOf.length
+  }
+  const actions = actionStages.find(st => actionsWidth(st) <= columns) ?? actionStages[actionStages.length - 1]!
+  return { info: info!, actions: { ...actions, width: actionsWidth(actions) } }
 }

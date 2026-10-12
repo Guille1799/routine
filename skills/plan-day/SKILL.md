@@ -58,11 +58,12 @@ unfinished task goes to tomorrow. Never ask task by task. Only the tasks the use
 get one of the other two:
 
 - **tomorrow** → nothing to write: unfinished tasks carry over by themselves, same id.
-- **ledger** → read `<data>/config/projects.toml`. If the task's project has an `entry`,
-  show the exact command you would run and run it only after the user says yes; then
-  `python -m routine drop --task <id> --data '{"note": "moved to the <project> ledger"}'`.
-  If the project has no `entry`, say so and keep the task for tomorrow (the holding list
-  does not exist yet).
+- **ledger** → first `python -m routine sort --task <id> --data '{"project": "<project>"}' --dry-run`.
+  It answers where the task would go: if `to` is `ledger:<project>`, show the user the exact
+  `command` and run the same line without `--dry-run` only after they say yes. If `to` is
+  `holding`, the project has no entry command yet: say so; the task goes to the dated holding
+  list (D34) when the user says yes. Never run a project's entry command directly: `sort` runs
+  it and records the result.
 - **drop** → `python -m routine drop --task <id> --data '{"note": "<why, in their words>"}'`.
 
 Inbox items carry over by themselves too; leave them. Then close the day:
