@@ -46,6 +46,8 @@ def fold(events: list[dict]) -> dict:
             }
             st["order"].append(tid)
         elif t == "start":
+            if ev.get("session"):  # the session that works on it (D64): its band shows this task
+                st["tasks"][tid]["session"] = ev["session"]
             st["tasks"][tid]["status"] = "active"
             st["tasks"][tid]["since"] = ev["ts"]
             st["active"] = tid
@@ -58,6 +60,8 @@ def fold(events: list[dict]) -> dict:
             st["tasks"][tid].setdefault("reopened", []).append(d["why"])
         elif t == "wait":
             task = st["tasks"][tid]
+            if ev.get("session"):
+                task["session"] = ev["session"]
             task["status"] = "waiting"
             task["waiting_since"] = ev["ts"]
             task.pop("since", None)

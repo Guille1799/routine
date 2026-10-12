@@ -49,6 +49,9 @@ piece that owns it is being built.
 | R37 | Task cards can be edited, never emptied of their start fields | D61 | tests/test_writer.py::test_r37_task_card_can_be_edited_but_not_emptied |
 | R38 | Automatic pause after idle minutes, configurable, reason idle | D59 | pending: P3 |
 | R39 | A task can wait (paused that moves on), freeing the active slot | D62 | tests/test_writer.py::test_r39_waiting_is_paused_that_moves_on_and_frees_the_active_slot |
+| R40 | Each task remembers its session; a side task can start straight as waiting | D64 | tests/test_writer.py::test_r40_tasks_remember_the_session_that_works_on_them |
+| R41 | A session's band shows its own task, and the day's active task dimmed when elsewhere | D64 | pending: P3 |
+| R42 | A dropped priority with a reason makes the day a justified exception | D63 | pending: P4 |
 
 ## Decisions without a requirement
 
