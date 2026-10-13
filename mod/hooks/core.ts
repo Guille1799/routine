@@ -20,6 +20,8 @@ export type Card = {
   waiting_since?: string
   /** The session of its last start or wait (D64): that session's band and context show it. */
   session?: string
+  /** When the current work phase began, kept by the writer (D73). */
+  work_started?: string
   /** The work/break rhythm chosen for the task (D67, D68): "pomodoro 25/5", "50/10", "free" or "none". */
   technique?: string
   /** Every pause, at the click; reason null until the user picks one (D56). */
@@ -157,8 +159,8 @@ export function freeBreakMinutes(workMinutes: number): number {
 }
 
 /**
- * Where the active task is in its rhythm (D67): the work phase starts at the later of the
- * task's start and the last break's end, so a reload or another session reads the same.
+ * Where the active task is in its rhythm (D67): the work phase starts where the writer says
+ * (`work_started`, D73), so a reload or another session reads the same.
  */
 export type Rhythm = {
   technique: string
@@ -181,9 +183,10 @@ export function rhythm(today: Today, id: string, nowMs: number): Rhythm | undefi
   const card = today.tasks[id]
   if (!card || card.status !== 'active' || !card.since) return undefined
   const t = parseTechnique(card.technique)
-  const since = Date.parse(card.since)
-  const lastEnd = today.last_break_end ? Date.parse(today.last_break_end) : NaN
-  const phaseStart = Number.isFinite(lastEnd) && lastEnd > since ? lastEnd : since
+  // The writer keeps when the current work phase began (D73): a short pause continues it, a
+  // pause as long as the break or a break starts a new one. A copy from before D73 has only `since`.
+  const started = Date.parse(card.work_started ?? card.since)
+  const phaseStart = Number.isFinite(started) ? started : Date.parse(card.since)
   const work = Math.max(0, Math.floor((nowMs - phaseStart) / 60000))
   return {
     technique: t.technique,

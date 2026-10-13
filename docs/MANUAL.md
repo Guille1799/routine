@@ -464,9 +464,11 @@ Each task can have a **rhythm** on its card (`technique`):
 | `free` (flowtime) | as long as you like | about a fifth of the work, rounded to 5, 10, 15 or 20 |
 | `none` (`no timer`) | no timer | whenever you want |
 
-Any `work/rest` pair such as `40/8` also works through `task-edit`. The work phase starts at
-the later of the task's start and the last break's end, so a reload or another session shows
-the same numbers. When a timed phase ends you get one toast and a `Start break` button. When
+Any `work/rest` pair such as `40/8` also works through `task-edit`. The writer keeps when the
+current work phase began (`work_started`, D73): a pause shorter than the rhythm's break
+continues the phase where it was (`19/25` stays `19/25`), while a pause as long as the break or
+longer (lunch), and every break, start a new phase. With no rhythm there is no phase. The band
+and the chip read it, so a reload or another session shows the same numbers. When a timed phase ends you get one toast and a `Start break` button. When
 the break is over you get a toast, the band asks about the phone, and a recap follows.
 
 A break can start with no task running. Starting a task ends a running break.
