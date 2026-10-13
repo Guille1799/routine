@@ -215,3 +215,4 @@ not decided (D48).
 | D69 | current | the close commits diary/ and state/ when the data folder is a git repository, never config, and says so; otherwise it says it skipped |
 | D71 | current | the manual (docs/MANUAL.md) is checked against the code by a test: every action, tool action, command, done field kind and setting read from the code must have its row |
 | D73 | current | after a pause, the work phase continues where it was if the pause was shorter than the technique's break, and starts again if it was as long or longer (it counted as a break); today.json gives each task its work_started |
+| D76 | current | without a technique, a pause shorter than 5 minutes keeps the work counter running; a longer one restarts it |

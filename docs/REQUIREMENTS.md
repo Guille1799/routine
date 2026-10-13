@@ -58,7 +58,7 @@ piece that owns it is being built.
 | R46 | The band names the technique and shows work and break phases with their minutes | D67, D68 | tests/test_mod.py::test_r46_the_band_shows_the_work_and_break_rhythm |
 | R47 | Closing the day commits diary/ and state/ in the data folder's git repository, never config; without one it says it skipped | D69 | tests/test_close.py::test_d69_the_close_commits_diary_and_state_only |
 | R48 | The manual covers every CLI action, tool action, slash command, done field kind and setting; a test fails if one is missing | D71 | tests/test_manual.py::test_r48_every_cli_action_is_in_the_manual |
-| R49 | The work phase continues after a short pause and restarts after a long one | D73 | tests/test_writer.py::test_r49_work_phase_continues_after_a_short_pause_and_restarts_after_a_long_one |
+| R49 | The work phase continues after a short pause and restarts after a long one | D73, D76 | tests/test_writer.py::test_r49_work_phase_continues_after_a_short_pause_and_restarts_after_a_long_one |
 
 ## Decisions without a requirement
 

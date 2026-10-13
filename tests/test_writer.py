@@ -457,4 +457,4 @@ def test_r49_work_phase_continues_after_a_short_pause_and_restarts_after_a_long_
     assert long_ == "2026-10-12T12:30:00+02:00"      # lunch: a new phase
     none = state.fold(base[:1] + [ev("09:00", "task_add", {"title": "x"}), ev("10:00", "start"),
                                   ev("10:19", "pause"), ev("10:21", "start")])["tasks"]["t"]
-    assert none["work_started"] == "2026-10-12T10:21:00+02:00"   # no technique: no carry-over
+    assert none["work_started"] == "2026-10-12T10:02:00+02:00"   # no technique: 5-min rule (D76)
