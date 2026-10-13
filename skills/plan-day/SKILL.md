@@ -69,6 +69,14 @@ get one of the other two:
 Inbox items carry over by themselves too; leave them. Then close the day:
 `python -m routine close-day --data '{"closed_by": "morning"}'`.
 
+Then the **commits not pushed** (D78): run `python -m routine unpushed` and show its
+`summary` in one line (`app 2 · notes no remote`). For each repository with `ahead` above 0,
+**one per message**, ask: "Push <repo>? <n> commits: <the first two subjects>". Only on a
+clear yes for that repository: `python -m routine push --data '{"repo": "<repo>"}'`, and show
+its `output`, which is where the repository's own guards speak. If the answer is `ok: false`,
+say why in one line and go on: never retry another way, never push a repository the user did
+not say yes to. `no remote` and `error` repositories are only named in the summary line.
+
 If `day` is today and `open` is true, the day was already opened: skip to step 5 and offer to
 add tasks. If there is no diary yet, this is the first day: go on.
 
@@ -102,6 +110,7 @@ Show it in the file's order, without reordering or highlighting:
 - a channel with `status: "error"`: `⚠ <title>: could not be read (<error>)`;
 - a channel with `baseline: true` is being read for the first time: show the count and say
   that nothing can be called new yet;
+- a channel with a `summary` (commits not pushed) shows that line instead of its commits;
 - channels in `skipped` (copies and dead ones) are not read: mention them in one line at most.
 
 Keep the two `old` items for step 6.

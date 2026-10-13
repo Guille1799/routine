@@ -3,7 +3,7 @@
 # label   source (read every morning) | copy (a copy of another channel: ignored)
 #         | dead (emptied once into its source, then archived: ignored)        (D40)
 # why     one line: why this label. Copies and dead channels are listed with it.
-# reader  markdown_rows | json_items | file_count  (options in routine/inventory.py)
+# reader  markdown_rows | json_items | file_count | git_unpushed  (options in routine/inventory.py)
 # new_by  row_id (default: the id the source gives the item) | text (a hash of its title)
 # never_capped  true: every new item is shown, never truncated (opportunities, D5)
 # old     true: this channel's oldest pending items can be offered as "old items" (D31)
@@ -75,6 +75,15 @@ reader = "file_count"
 path = "~/projects/example/to-review"
 glob = "*.md"
 never_capped = true
+
+# Commits not pushed (D78): one count per repository, "no remote" when a branch has no
+# upstream. Without `repos`, every project in projects.toml is watched.
+[[channel]]
+id = "unpushed"
+title = "Commits not pushed"
+label = "source"
+why = "git itself: the commits on each branch that its upstream does not have"
+reader = "git_unpushed"
 
 [[channel]]
 id = "queue_view"

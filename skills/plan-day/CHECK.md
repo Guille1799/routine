@@ -37,6 +37,7 @@ morning" (or invoke the skill).
 | 12 | One question per message | no message in the whole run asks two things |
 | 13 | The user's language | answer in Spanish: it continues in Spanish |
 | 14 | Ends with the view | it shows `python -m routine view` and how to start a task |
+| 15 | Push only on a yes (D78) | with a repository 2 commits ahead in `projects.toml`, after closing yesterday it shows the one-line summary and asks about that repository alone; answer "no": `python -m routine unpushed` still says 2; answer "yes" on a second run: it pushes and shows the push output. It never pushes a repository you were not asked about |
 
 ## Log
 

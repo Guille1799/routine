@@ -59,6 +59,7 @@ piece that owns it is being built.
 | R47 | Closing the day commits diary/ and state/ in the data folder's git repository, never config; without one it says it skipped | D69 | tests/test_close.py::test_d69_the_close_commits_diary_and_state_only |
 | R48 | The manual covers every CLI action, tool action, slash command, done field kind and setting; a test fails if one is missing | D71 | tests/test_manual.py::test_r48_every_cli_action_is_in_the_manual |
 | R49 | The work phase continues after a short pause and restarts after a long one | D73, D76 | tests/test_writer.py::test_r49_work_phase_continues_after_a_short_pause_and_restarts_after_a_long_one |
+| R50 | Commits not pushed are counted per repository (no upstream says "no remote", a git failure is an error, never 0), and a repository is pushed only by name with a plain git push whose hooks run | D78 | tests/test_unpushed.py::test_r50_commits_not_pushed_are_counted_and_no_remote_is_never_zero |
 
 ## Decisions without a requirement
 

@@ -11,6 +11,8 @@ session through Bash) uses this, never the files directly.
     python -m routine sort        # sends an item to its one place (D27, D32, D34); --dry-run first
     python -m routine library     # the library, the holding list and this close's expired item (D33)
     python -m routine stats       # the fulfilled-day rate and the list of days (D7, D41, D63)
+    python -m routine unpushed    # commits not pushed, per repository (D78)
+    python -m routine push --data '{"repo": "<name>"}'   # git push in that repository (D78)
 
 close-day also commits diary/ and state/ when the data folder is a git repository (D69).
 
@@ -24,7 +26,8 @@ import json
 import sys
 from datetime import datetime
 
-from . import config, datagit, events, inventory, library, paths, sorting, state, stats, view, writer
+from . import (config, datagit, events, gitrepos, inventory, library, paths, sorting, state, stats,
+               view, writer)
 
 # Written only by `sort`, which runs the entry command first: a raw call could claim an item
 # reached a ledger without anything having run (D27).
@@ -36,7 +39,7 @@ def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="routine", description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("action", choices=ACTIONS + ["status", "view", "fields", "settings", "inventory", "refresh",
-                                           "sort", "library", "stats"])
+                                           "sort", "library", "stats", "unpushed", "push"])
     p.add_argument("--task")
     p.add_argument("--data", default="{}", help="JSON object with the event fields")
     p.add_argument("--session")
@@ -83,6 +86,8 @@ def main(argv: list[str] | None = None) -> int:
         code, result = inventory.main(root, day=args.day)
         print(json.dumps(result, ensure_ascii=False))
         return code
+    if args.action in ("unpushed", "push"):
+        return _git_action(root, args.action, args.data)
     if args.action in ("sort", "library", "stats"):
         try:
             if args.action == "sort":
@@ -120,6 +125,31 @@ def main(argv: list[str] | None = None) -> int:
         result["git"] = datagit.commit_day(root, written[-1]["day"])
     print(json.dumps(result, ensure_ascii=False))
     return 0
+
+
+def _git_action(root, action: str, raw: str) -> int:
+    """`unpushed` lists every repository; `push` pushes one, named, after the user said yes (D78)."""
+    try:
+        repos = gitrepos.configured(root)
+        if action == "unpushed":
+            checked = [gitrepos.check(name, path) for name, path in repos]
+            print(json.dumps({"ok": True, "summary": gitrepos.summary(checked), "repos": checked},
+                             ensure_ascii=False))
+            return 0
+        data = json.loads(raw)
+        if not isinstance(data, dict) or set(data) != {"repo"}:
+            raise gitrepos.RepoError('push takes exactly {"repo": "<name>"}; nothing else can be '
+                                     'added to the command')
+        known = dict(repos)
+        if data["repo"] not in known:
+            raise gitrepos.RepoError(f"unknown repository {data['repo']!r} "
+                                     f"(known: {', '.join(known)})")
+        result = gitrepos.push(data["repo"], known[data["repo"]])
+    except (json.JSONDecodeError, config.ConfigError, gitrepos.RepoError) as exc:
+        print(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False))
+        return 1
+    print(json.dumps({"ok": result["pushed"], **result}, ensure_ascii=False))
+    return 0 if result["pushed"] else 1
 
 
 def _today() -> str:

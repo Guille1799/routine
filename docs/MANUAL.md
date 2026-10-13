@@ -103,7 +103,8 @@ code 2 means the data folder was not found.
 
 1. **Morning.** Say "good morning" or type `/plan-day`. The skill:
    - closes yesterday if it is still open (unfinished tasks go to tomorrow unless you name
-     some to drop or move to a project ledger);
+     some to drop or move to a project ledger), then shows the commits not pushed in each
+     repository and pushes each one you say yes to;
    - shows today's calendar and unanswered mail, read-only;
    - runs the inventory and shows one count per channel, with only the new items listed,
      plus two old items it offers you;
@@ -137,7 +138,9 @@ code 2 means the data folder was not found.
    what you did not sort carries to tomorrow, where `/plan-day` sorts it. If you do not close,
    the next morning `/plan-day` closes the day for you. Closing pauses
    the active task, ends a running break and, when the data folder is a git repository,
-   commits the day. Unfinished tasks and inbox items move to the next day when it opens, with
+   commits the day. Then `python -m routine unpushed` shows the commits not pushed in each
+   repository, and `push --data '{"repo": "<name>"}'` pushes the ones you choose, one by one.
+   Unfinished tasks and inbox items move to the next day when it opens, with
    the same id and a counter of how many days they carried. Skipping the close loses nothing.
    See [The close](#the-close-sorting-library-and-the-day-rate).
 
@@ -229,6 +232,8 @@ the mod; you rarely type them.
 | `library-decide` | the decision on an expired item: `keep` or `drop` (`promote` goes through `sort`) | `python -m routine library-decide --data '{"item": "i-df8d44fd", "decision": "keep"}'` |
 | `exception` | a written exception for a day, today or earlier: the day leaves the rate | `python -m routine exception --data '{"for": "2026-10-10", "why": "travelling"}'` |
 | `stats` | the fulfilled-day rate and the list of days | `python -m routine stats --since 2026-10-01` |
+| `unpushed` | lists the commits not pushed in each repository of `projects.toml`: `ahead` and the commits, `no remote` when the branch has no upstream, or an error. Reads only | `python -m routine unpushed` |
+| `push` | runs a plain `git push` in one repository from that list, by name. Its own pre-push hooks run and their output comes back in `output`; a refused push answers `ok: false`, exit 1. Nothing else can be added: no force, no skipping hooks. The skill runs it only after you say yes to that repository | `python -m routine push --data '{"repo": "my-app"}'` |
 
 `sort` writes the events `inbox_sorted` (an inbox item), `held_sorted` (a held item sent on),
 `drop` with `sent_to` (a task) or `library_decide` with `promote`. They are not actions of
@@ -566,7 +571,9 @@ old = true
 
 - `label`: `source` is read; `copy` and `dead` are listed and never read.
 - `reader`: `markdown_rows` (table rows, open checkboxes, bullets or headings), `json_items`
-  (a JSON or JSON Lines file) or `file_count` (one item per file in a folder). Each reader's
+  (a JSON or JSON Lines file), `file_count` (one item per file in a folder) or
+  `git_unpushed` (the commits not pushed in each repository of `projects.toml`, or of the
+  channel's `repos` list; the sheet shows one line such as `my-app 2 · notes no remote`). Each reader's
   options are in its docstring in `routine/inventory.py`; `examples/data/config/channels.toml`
   uses most of them.
 - `never_capped = true` shows every new item (opportunities); otherwise at most `max_new`
