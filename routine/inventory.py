@@ -32,6 +32,8 @@ import tomllib
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
+from . import gitrepos
+
 LABELS = ("source", "copy", "dead")
 DEFAULTS = {"max_new": 10, "old_per_day": 2, "old_cooldown_days": 7, "forget_after_days": 30}
 TITLE_MAX = 200
@@ -323,8 +325,30 @@ def read_file_count(ch: dict, path: Path, today: str) -> list[dict]:
             for p in entries]
 
 
+def read_git_unpushed(ch: dict, root: Path, today: str, extra: dict) -> list[dict]:
+    """One item per commit not pushed, across repositories (D78).
+
+    repos    folders to watch (default: every project in projects.toml)
+
+    The channel also gets `repos` (one entry per repository: status ok with `ahead`, no
+    remote, or error) and `summary` ("routine 0 · app 12 · notes no remote"). A repository
+    that git cannot read makes the channel an error, with the other repositories still
+    listed: one failure is never shown as a zero.
+    """
+    repos = [gitrepos.check(name, path) for name, path in gitrepos.configured(root, ch)]
+    extra["repos"] = [{k: v for k, v in r.items() if k != "commits"} for r in repos]
+    extra["summary"] = gitrepos.summary(repos)
+    bad = [r for r in repos if r["status"] == "error"]
+    if bad:
+        extra["error"] = "; ".join(f"{r['repo']}: {r['error']}" for r in bad)
+    return [{"id": c["sha"], "title": short(f"{r['repo']}: {c['subject']}"),
+             "born": c["date"] or None, "_text": c["subject"]}
+            for r in repos if r["status"] == "ok" for c in r["commits"]]
+
+
 READERS = {"markdown_rows": read_markdown_rows, "json_items": read_json_items,
-           "file_count": read_file_count}
+           "file_count": read_file_count, "git_unpushed": read_git_unpushed}
+PATHLESS = {"git_unpushed"}   # readers that take their places from the config, not `path`
 
 
 # ---------------------------------------------------------------- config
@@ -353,17 +377,22 @@ def load_config(root: Path) -> tuple[list[dict], dict]:
     return channels, settings
 
 
-def _read_channel(ch: dict, today: str) -> list[dict]:
+def _read_channel(ch: dict, today: str, root: Path | None = None,
+                  extra: dict | None = None) -> list[dict]:
+    """The channel's items. `extra` receives what a reader says about the channel as a whole."""
     reader = READERS.get(ch.get("reader"))
     if not reader:
         raise ReadError(f"config: unknown reader {ch.get('reader')!r} "
                         f"(known: {', '.join(READERS)})")
-    if not ch.get("path"):
-        raise ReadError("config: no path")
-    path = Path(ch["path"]).expanduser()
-    if not path.exists():
-        raise ReadError(f"not found: {path}")
-    items = reader(ch, path, today)
+    if ch.get("reader") in PATHLESS:
+        items = reader(ch, root, today, extra if extra is not None else {})
+    else:
+        if not ch.get("path"):
+            raise ReadError("config: no path")
+        path = Path(ch["path"]).expanduser()
+        if not path.exists():
+            raise ReadError(f"not found: {path}")
+        items = reader(ch, path, today)
     if ch.get("new_by") == "text":
         for it in items:
             it["id"] = text_id(it["_text"])
@@ -413,14 +442,17 @@ def build(root: Path, day: str | None = None, now: datetime | None = None) -> di
                             "why": ch.get("why", "")})
             continue
         entry = {"id": ch["id"], "title": ch.get("title", ch["id"]), "label": label}
+        extra: dict = {}
         try:
             if label not in LABELS:
                 raise ReadError(f"config: label must be one of {', '.join(LABELS)}, "
                                 f"not {label!r}")
-            items = _read_channel(ch, today)
+            items = _read_channel(ch, today, root=root, extra=extra)
+            if extra.get("error"):
+                raise ReadError(extra.pop("error"))
         except Exception as exc:  # one broken channel never hides the others
             entry.update(status="error", error=str(exc) or type(exc).__name__,
-                         count=None, new=None)
+                         count=None, new=None, **extra)
             out_channels.append(entry)
             continue
 
@@ -439,7 +471,7 @@ def build(root: Path, day: str | None = None, now: datetime | None = None) -> di
         shown = new if cap is None else new[:cap]
         entry.update(status="ok", count=len(items),
                      new=[{k: it[k] for k in ("id", "title", "link") if it.get(k)} for it in shown],
-                     new_total=len(new))
+                     new_total=len(new), **extra)
         if baseline:
             entry["baseline"] = True
         out_channels.append(entry)

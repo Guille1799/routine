@@ -124,6 +124,13 @@ too (D30). The sheet shows one count per channel and expands only what is new (D
 - **The close commits the day** (D69): when the data folder is a git repository, closing
   the day commits `diary/` and `state/` there, never `config/`, and says so; when it is not
   one, the close says it skipped the commit.
+- **Commits not pushed** (D78): the morning inventory has a channel with one count per
+  repository, the commits on its branch that the upstream does not have; a repository with no
+  upstream says "no remote", never 0, and one git cannot read is an error. The repositories
+  are the projects in `projects.toml`. At the close (the morning's close-yesterday step and
+  the close flow) the list is shown, and each repository is pushed only after the user says
+  yes to that one: a plain `git push`, so its own pre-push hooks run and speak; the routine
+  has no way to force a push or skip a hook.
 - **The manual is checked against the code** (D71): `docs/MANUAL.md` must have a row for
   every CLI action, tool action, slash command, done field kind and setting, read from the
   code by `tests/test_manual.py`, so the manual cannot fall behind silently.
@@ -216,3 +223,4 @@ not decided (D48).
 | D71 | current | the manual (docs/MANUAL.md) is checked against the code by a test: every action, tool action, command, done field kind and setting read from the code must have its row |
 | D73 | current | after a pause, the work phase continues where it was if the pause was shorter than the technique's break, and starts again if it was as long or longer (it counted as a break); today.json gives each task its work_started |
 | D76 | current | without a technique, a pause shorter than 5 minutes keeps the work counter running; a longer one restarts it |
+| D78 | current | commits not pushed: the morning inventory shows one count per repository ("no remote" when a branch has no upstream, never 0); at the close the list is shown and each repository is pushed only after the user says yes to it, with a plain git push whose own hooks run |

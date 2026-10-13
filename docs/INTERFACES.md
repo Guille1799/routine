@@ -89,7 +89,8 @@ since}, break, drift, tomorrow, last_ts`. Readers never write it. The band shows
 inventory/YYYY-MM-DD.json:
 {"generated": ISO, "day": "YYYY-MM-DD",
  "channels": [{"id", "title", "label": "source", "status": "ok"|"error", "error"?,
-               "count", "new": [{"id", "title", "link"?}], "new_total", "baseline"?}],
+               "count", "new": [{"id", "title", "link"?}], "new_total", "baseline"?,
+               "summary"?, "repos"?}],
  "skipped":  [{"id", "title", "label": "copy"|"dead", "why"}],
  "old":      [{"channel", "id", "title", "since": "YYYY-MM-DD"|null, "link"?}]}
 ```
@@ -101,6 +102,10 @@ inventory/YYYY-MM-DD.json:
 - `baseline: true` = the channel is read for the first time, so nothing can be called new.
 - `old` = the oldest pending items of channels marked `old = true` (D31), two a day, never
   the same one within 7 days.
+- A `git_unpushed` channel (D78) adds `summary` (`"app 2 · notes no remote"`) and `repos`:
+  `[{"repo", "path", "status": "ok"|"no remote"|"error", "branch"?, "upstream"?, "ahead"?,
+  "why"?, "error"?}]`. Its items are the commits not pushed. A repository git cannot read
+  makes the channel an error, with `summary` and `repos` still there.
 - Private state in `inventory/seen.json` (first and last day each item was seen; old items
   offered).
 
