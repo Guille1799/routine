@@ -127,3 +127,29 @@ test('R38: a non-interactive run never pauses anything', { options: OPTIONS }, a
   await w.clock.advance(60 * MIN)
   expect(w.runs).toEqual([])
 })
+
+test('R38: typing in the prompt box is not idleness: no pause while the draft keeps changing', { options: OPTIONS }, async ($, on) => {
+  const w = world(on)
+  await $.session.start(START)
+  await answered($)
+  for (let minute = 1; minute <= 30; minute += 1) {
+    w.draft = 'x'.repeat(minute) // it grows every minute
+    await w.clock.advance(1 * MIN)
+  }
+  expect(idlePauses(w)).toEqual([])
+  // The person stops typing and walks away, the draft left in the box: idle from the last change.
+  await w.clock.advance(19 * MIN)
+  expect(idlePauses(w)).toEqual([])
+  await w.clock.advance(2 * MIN)
+  expect(idlePauses(w)).toEqual([argvOf(C.pause_idle!, ACTIVE)])
+  // The minute looks reuse the setting read when the window began: no process each minute.
+  expect(w.runs.filter(r => r[3] === 'settings').length).toBeLessThanOrEqual(3)
+})
+
+test('R38: a draft that does not change is idle, the same as an empty box', { options: OPTIONS }, async ($, on) => {
+  const w = world(on, { draft: 'half a sentence' })
+  await $.session.start(START)
+  await answered($)
+  await w.clock.advance(20 * MIN)
+  expect(idlePauses(w)).toEqual([argvOf(C.pause_idle!, ACTIVE)])
+})

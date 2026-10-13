@@ -130,14 +130,15 @@ test('R46: free shows the minutes worked and suggests about a fifth of them', { 
   expect(writes(w)).toEqual([argvOf({ ...C.break_start!, data: { technique: 'free', minutes: 10 } })])
 })
 
-test('R46: the first start with no rhythm offers the choice in one row; no timer until a pick (D68)', { options: OPTIONS }, async ($, on) => {
+test('R46: the first start with no rhythm asks to pick one, nothing highlighted; no timer until a pick, then the row goes (D68)', { options: OPTIONS }, async ($, on) => {
   const w = world(on, { today: at(undefined) })
   await $.session.start(START)
   const ui = await $.ui.mount({ ...band(), surface: 'desktop' })
   const line = await text(ui)
-  expect(line).toContain('Rhythm for T2: [pomodoro 25/5] [50/10] [free] [no timer]')
+  expect(line).toContain('Rhythm for T2? pick one: [pomodoro 25/5] [50/10] [free] [no timer]')
   expect(line).not.toContain('work 11')
-  expect((await ui.find({ key: 'technique-0' }))?.props.variant).toBe('primary')
+  // Nothing looks chosen before a pick (G, 2026-10-13: a highlighted pomodoro read as chosen).
+  for (const n of [0, 1, 2, 3]) expect((await ui.find({ key: `technique-${n}` }))?.props.variant).toBeUndefined()
   await ui.press({ key: 'technique-1' })
   expect(writes(w)).toEqual([argvOf(C.task_edit_technique!, ACTIVE)])
   w.today = at('50/10')
