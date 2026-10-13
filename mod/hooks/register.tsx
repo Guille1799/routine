@@ -877,13 +877,13 @@ export const register: Register = (on, options) => {
       )
     }
     if (b.task?.rhythm?.unchosen && !b.break) {
-      // First start with no rhythm (D67): one row, pomodoro suggested; no timer until a pick (D68).
+      // First start with no rhythm (D67): one row to pick it; nothing looks chosen until a pick (D68, G 2026-10-13).
       const task = b.task.id
       rows.push(
         <Box key="techniques" columnGap={1}>
-          <Text dimColor>{`Rhythm for ${b.task.alias}:`}</Text>
+          <Text color="yellow">{`Rhythm for ${b.task.alias}? pick one:`}</Text>
           {TECHNIQUES.map((technique, n) => (
-            <Button key={`technique-${n}`} label={technique === 'none' ? 'no timer' : technique} variant={n === 0 ? 'primary' : undefined} onPress={() => setTechnique($, task, technique)} />
+            <Button key={`technique-${n}`} label={technique === 'none' ? 'no timer' : technique} onPress={() => setTechnique($, task, technique)} />
           ))}
         </Box>,
       )
