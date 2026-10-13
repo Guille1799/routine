@@ -71,6 +71,13 @@ let workToastedFor: string | undefined
 // The idle pause (D59): this session's last answer and the timer that checks after it.
 let lastAnswerAt = 0
 let idleTimer: { cancel: () => void } | undefined
+// Typing is not idleness (G, 2026-10-13): the prompt box as last seen, and when it last changed.
+let lastDraft = ''
+let lastTypingAt = 0
+/** How often the prompt box is looked at while the idle window runs. */
+const DRAFT_CHECK_MS = 60_000
+/** idle_pause_minutes as read at the start of the idle window, so the minute looks spawn no process. */
+let idleMinutesRead: number | undefined
 
 async function settings($: $): Promise<Settings> {
   const fromOptions = String(OPTIONS.dataDir ?? '').trim()
@@ -391,15 +398,27 @@ async function idleMinutes($: $): Promise<number> {
 }
 
 /** Checks whether the idle pause is due: pauses with the reason `idle`, or waits the rest. */
-async function idleCheck($: $): Promise<void> {
+async function idleCheck($: $, fresh = true): Promise<void> {
   idleTimer?.cancel()
   idleTimer = undefined
   if (!(await isInteractive($))) return
   const r = await readToday($)
-  const minutes = r.today?.active ? await idleMinutes($) : 0
-  const due = idleDue(r.today, lastAnswerAt, minutes, await $.clock.now(), await $.session.id())
+  if (fresh || idleMinutesRead === undefined) idleMinutesRead = r.today?.active ? await idleMinutes($) : undefined
+  const minutes = r.today?.active ? idleMinutesRead ?? 0 : 0
+  const now = await $.clock.now()
+  // A draft that changed since the last look is the person typing: the idle window starts
+  // again there. A draft left as it was, empty or not, counts as idle.
+  const text = await $.prompt.read().then(box => box.text, err => {
+    $.ui.log(`routine: the prompt box could not be read: ${String(err)}`, { to: 'debug' })
+    return lastDraft // unknown: treated as unchanged
+  })
+  if (text !== lastDraft) {
+    lastDraft = text
+    lastTypingAt = now
+  }
+  const due = idleDue(r.today, Math.max(lastAnswerAt, lastTypingAt), minutes, now, await $.session.id())
   if (due.kind === 'wait') {
-    idleTimer = $.clock.after(due.ms, () => void idleCheck($))
+    idleTimer = $.clock.after(Math.min(due.ms, DRAFT_CHECK_MS), () => void idleCheck($, false))
   } else if (due.kind === 'pause') {
     const out = await write($, { action: 'pause', task: due.task, data: { reason: 'idle' } })
     if (out.ok) $.ui.toast(`Paused after ${minutes} idle minutes. Resume when you are back.`)
@@ -587,6 +606,7 @@ export const register: Register = (on, options) => {
     await setup($)
     idleTimer?.cancel() // the user is here: no idle pause until the next answer ends
     idleTimer = undefined
+    lastDraft = '' // the box empties when the prompt is sent
     const captured = inboxText(e.text)
     if (captured !== undefined) return { drop: await capture($, captured) }
     const r = await readToday($)

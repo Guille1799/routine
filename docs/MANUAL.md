@@ -535,7 +535,7 @@ is refused.
 
 | Setting | Default | What |
 |---|---|---|
-| `idle_pause_minutes` | `20` | minutes with no prompt, no answer and no diary event before the active task pauses with the reason `idle`. `0` turns it off |
+| `idle_pause_minutes` | `20` | minutes with no prompt, no answer, no diary event and no typing in the prompt box before the active task pauses with the reason `idle`. A draft that keeps changing is typing; a draft left as it was counts as idle. `0` turns it off |
 
 ```toml
 idle_pause_minutes = 30

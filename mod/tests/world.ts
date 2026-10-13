@@ -97,6 +97,8 @@ export type World = {
   opened: string[]
   /** The session the engine says this is (D64): change it to stand for another session. */
   session: string
+  /** What the prompt box holds now: the person's draft. */
+  draft: string
   /** The mocked clock, to move to another day. */
   clock: MockClock
 }
@@ -143,6 +145,7 @@ export function world(on: On, over: Partial<World> = {}): World {
     toasts: [],
     opened: [],
     session: SESSION,
+    draft: '',
     clock: undefined as unknown as MockClock,
     ...over,
   }
@@ -208,6 +211,7 @@ export function world(on: On, over: Partial<World> = {}): World {
     w.toasts.push(e.text)
     return { value: undefined }
   })
+  on('prompt.read', () => ({ value: { text: w.draft, cursor: w.draft.length } }) as never)
   on('ui.open', ($, e) => {
     w.opened.push(e.id)
     return { value: { isPlaced: true } as never }
