@@ -573,7 +573,14 @@ old = true
 - `reader`: `markdown_rows` (table rows, open checkboxes, bullets or headings), `json_items`
   (a JSON or JSON Lines file), `file_count` (one item per file in a folder) or
   `git_unpushed` (the commits not pushed in each repository of `projects.toml`, or of the
-  channel's `repos` list; the sheet shows one line such as `my-app 2 · notes no remote`). Each reader's
+  channel's `repos` list; the sheet shows one line such as `my-app 2 · notes no remote`) or
+  `command_lines` (one item per line a command prints, for a project that already has a
+  command listing its deadlines; `count_line` makes the channel an error if the command's
+  count and the lines read differ).
+- `show_all = true` lists every item every day, not only the new ones; `/plan-day` shows these
+  channels first (what closes soon). `note` is shown with them word for word.
+- `parked = '<regex with a date>'`: an item whose text matches with a later date is parked
+  until then: not counted, never new, never offered. The count says how many are parked. Each reader's
   options are in its docstring in `routine/inventory.py`; `examples/data/config/channels.toml`
   uses most of them.
 - `never_capped = true` shows every new item (opportunities); otherwise at most `max_new`

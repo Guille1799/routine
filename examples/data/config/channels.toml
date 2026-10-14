@@ -76,6 +76,23 @@ path = "~/projects/example/to-review"
 glob = "*.md"
 never_capped = true
 
+# What closes soon (D79): run a deadline command the project already has, list every line
+# every day, soonest first. Commented out here because the example project has no such
+# command; `count_line` makes the channel an error if the command's format changes.
+# [[channel]]
+# id = "closing-soon"
+# title = "Closing in 10 days or less"
+# label = "source"
+# why = "the queue's own deadline list"
+# reader = "command_lines"
+# path = "~/projects/example"
+# command = ["python", "bin/deadlines.py", "--days", "10"]
+# item = '^\s*·\s*(?P<title>CLOSES (?P<date>\d{4}-\d{2}-\d{2}) .*?· (?P<id>.+) · score .*)$'
+# count_line = '^(\d+) deadline'
+# sort = "date"
+# show_all = true
+# note = "dates read from the queue file, not opened today"
+
 # Commits not pushed (D78): one count per repository, "no remote" when a branch has no
 # upstream. Without `repos`, every project in projects.toml is watched.
 [[channel]]

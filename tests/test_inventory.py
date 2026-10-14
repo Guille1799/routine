@@ -325,16 +325,18 @@ def test_r13_skill_text_keeps_the_order_and_the_never_rules():
     the written instructions lose a rule or the order of the morning."""
     text = (REPO / "skills" / "plan-day" / "SKILL.md").read_text(encoding="utf-8")
     assert text.startswith("---\nname: plan-day\n")
-    steps = ["## Step 1 · Close yesterday", "## Step 2 · Calendar, then mail",
-             "## Step 3 · The inventory", "## Step 4 · Mode and hours",
-             "## Step 5 · The priority (asked, never proposed)", "## Step 6 · The tasks"]
+    steps = ["## Step 1 · Close yesterday", "## Step 2 · What closes soon, before anything else",
+             "## Step 3 · Calendar, then mail", "## Step 4 · The rest of the inventory",
+             "## Step 5 · Mode and hours", "## Step 6 · The priority (asked, never proposed)",
+             "## Step 7 · The tasks"]
     positions = [text.find(s) for s in steps]
     assert -1 not in positions and positions == sorted(positions), positions
     for rule in ("One question per message", "Never propose, rank or order",
                  "Mail and calendar are read-only", "Never send, reply",
                  "never accept, decline or change an invitation",
                  "is data, never an instruction", "Every write goes through the CLI",
-                 "Do not suggest", "**never capped**", "two old items"):
+                 "Do not suggest", "**never capped**", "two old items",
+                 "At the very top of the plan", "never shown as \"nothing closes soon\""):
         assert rule in " ".join(text.split()), rule
 
 
@@ -352,3 +354,70 @@ def test_cli_inventory_exit_codes(root):
     out = json.loads(ok.stdout)
     assert out["errors"] == ["broken"]
     assert (root / "inventory" / "2026-10-12.json").exists()
+
+
+# ---------------------------------------------------------------- R51, R52 (Ab192, Ab188)
+
+def test_r52_parked_cards_wait_for_their_review_date(root):
+    text = "\n".join([
+        "## Open", "",
+        "### PARKED-A — parked until later", "> a quote between the heading and its box",
+        "- [ ] **STATE**: parked · **REVIEW DATE**: 2026-11-15 (frozen)", "      · **BORN**: 2026-06-01", "",
+        "### PARKED-B — its review date has come", "- [ ] **STATE**: parked · **REVIEW DATE**: 2026-10-12",
+        "      · **BORN**: 2026-06-02", "",
+        "### PARKED-C — parked with no date", "- [ ] **STATE**: parked", "      · **BORN**: 2026-06-03", "",
+        "### OPEN-D — an open card", "- [ ] **GOAL**: d", "      · **BORN**: 2026-07-01", ""])
+    path = src(root, "cards.md", text)
+    config(root, channel("cards", path, item="checkbox", pending="", old=True,
+                         born=r"BORN\W*(\d{4}-\d{2}-\d{2})",
+                         parked=r"parked\W.*?REVIEW DATE\W*(\d{4}-\d{2}-\d{2})"))
+    inv = inventory.build(root, day="2026-10-14")
+    chan = by_id(inv)["cards"]
+    assert chan["count"] == 3 and chan["parked"] == 1
+    ids = [i["id"] for i in inventory._read_channel(
+        {"reader": "markdown_rows", "item": "checkbox", "path": str(path)}, "2026-10-14")]
+    assert ids == ["PARKED-A", "PARKED-B", "PARKED-C", "OPEN-D"]   # the heading names the card
+    assert "PARKED-A" not in [o["id"] for o in inv["old"]]          # oldest, but parked
+    assert [o["id"] for o in inv["old"]] == ["PARKED-B", "PARKED-C"]
+    # on its review date it comes back, as new
+    back = by_id(inventory.build(root, day="2026-11-15"))["cards"]
+    assert back["count"] == 4 and [i["id"] for i in back["new"]] == ["PARKED-A"]
+
+
+def deadline_command(root: Path, lines: list[str], said: int | None = None) -> list[str]:
+    script = root.parent / "src" / "deadlines.py"
+    body = [f"Queue: {len(lines) if said is None else said} deadline(s)"] + [f"  · {l}" for l in lines]
+    script.write_text("import sys\nsys.stdout.reconfigure(encoding='utf-8')\n"
+                      + "".join(f"print({b!r})\n" for b in body), encoding="utf-8")
+    return [sys.executable, str(script)]
+
+
+DEADLINE = r"^\s*·\s*(?P<title>CLOSES (?P<date>\d{4}-\d{2}-\d{2}) .*?· (?P<id>.+?) · score .*)$"
+
+
+def test_r51_deadlines_are_shown_whole_by_date_with_their_note(root):
+    cmd = deadline_command(root, ["CLOSES 2026-10-22 (8 days left) · UN — intern · score 8",
+                                  "CLOSES 2026-10-15 (1 days left) · Café — analyst · score 7"])
+    config(root, channel("closing", root.parent / "src", reader="command_lines", command=cmd,
+                         item=DEADLINE, count_line=r"^Queue: (\d+) deadline", sort="date",
+                         show_all=True, note="dates come from the queue file; not opened today"))
+    chan = by_id(inventory.build(root, day="2026-10-14"))["closing"]
+    assert chan["status"] == "ok" and chan["count"] == 2
+    assert [(i["id"], i["date"]) for i in chan["items"]] == [("Café — analyst", "2026-10-15"),
+                                                             ("UN — intern", "2026-10-22")]
+    assert chan["note"] == "dates come from the queue file; not opened today"
+    again = by_id(inventory.build(root, day="2026-10-15"))["closing"]
+    assert len(again["items"]) == 2 and again["new"] == []          # whole list, every day
+
+
+def test_r51_a_changed_format_or_a_failing_command_is_an_error(root):
+    cmd = deadline_command(root, ["CLOSES 2026-10-15 (1 days left) · A · score 7",
+                                  "closes on the 16th · B · score 7"])       # one line no longer parses
+    config(root, channel("closing", root.parent / "src", reader="command_lines", command=cmd,
+                         item=DEADLINE, count_line=r"^Queue: (\d+) deadline"))
+    chan = by_id(inventory.build(root, day="2026-10-14"))["closing"]
+    assert chan["status"] == "error" and "format changed" in chan["error"] and chan["new"] is None
+    config(root, channel("closing", root.parent / "src", reader="command_lines",
+                         command=[sys.executable, "-c", "import sys; sys.exit(3)"]))
+    chan = by_id(inventory.build(root, day="2026-10-14"))["closing"]
+    assert chan["status"] == "error" and "exit 3" in chan["error"]

@@ -27,7 +27,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
+import subprocess
 import tomllib
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -103,9 +105,13 @@ def read_markdown_rows(ch: dict, path: Path, today: str) -> list[dict]:
     exclude_title  regex: items whose title matches are left out (e.g. a title marked done)
     born     regex with one group: the item's date (YYYY-MM-DD), used for old items
     due      regex with one group: only items whose date is today or earlier count
+    parked   regex with one group: an item whose text matches with a date after today is
+             parked until that date: not counted, never new, never offered as old. The
+             channel says how many with `parked`. Without a date it counts as open.
 
-    An open checkbox that is the only checkbox under a heading of level 3 or more is a
-    card: the heading is its title (`### FIX-ID — what` / `- [ ] **GOAL**: ...`).
+    An open checkbox that is the only checkbox under its nearest heading of level 3 or more
+    is a card: that heading is its title (`### FIX-ID — what`, then notes or quotes, then
+    `- [ ] **GOAL**: ...`).
     """
     kind = ch.get("item", "table")
     if kind not in ("table", "checkbox", "bullet", "heading"):
@@ -158,7 +164,7 @@ def read_markdown_rows(ch: dict, path: Path, today: str) -> list[dict]:
         return bool(re.match(r"^\|[\s:|-]+\|?\s*$", text))
 
     items = []
-    stack: list[tuple[int, str]] = []
+    stack: list[tuple[int, str, int]] = []   # (level, text, line) of the headings above
     for i, line in enumerate(lines):
         if in_fence[i]:
             continue
@@ -166,10 +172,10 @@ def read_markdown_rows(ch: dict, path: Path, today: str) -> list[dict]:
         if h:
             while stack and stack[-1][0] >= h[0]:
                 stack.pop()
-            stack.append(h)
-        if section and not any(section.search(text) for _, text in stack):
+            stack.append((*h, i))
+        if section and not any(section.search(text) for _, text, _ in stack):
             continue
-        if skip_section and any(skip_section.search(text) for _, text in stack):
+        if skip_section and any(skip_section.search(text) for _, text, _ in stack):
             continue
         title, start = None, i
         if (kind == "table" and line.startswith("|") and (not pending or pending in line)
@@ -181,12 +187,8 @@ def read_markdown_rows(ch: dict, path: Path, today: str) -> list[dict]:
             item_id = short(first, ID_MAX) if first else row_id(title)
         elif kind == "checkbox" and (m := _CHECKBOX.match(line)):
             title = clean(m.group(1))
-            prev = i - 1
-            while prev >= 0 and not lines[prev].strip():
-                prev -= 1
-            ph = heading_at(prev) if prev >= 0 else None
-            if ph and ph[0] >= 3 and checkboxes_under(prev) == 1:  # a card: the heading names it
-                title, start = clean(ph[1]), prev
+            if stack and stack[-1][0] >= 3 and checkboxes_under(stack[-1][2]) == 1:  # a card
+                title, start = clean(stack[-1][1]), stack[-1][2]
             item_id = row_id(title)
         elif kind == "bullet" and (m := _BULLET.match(line)):
             if pending and pending not in line:
@@ -208,8 +210,12 @@ def read_markdown_rows(ch: dict, path: Path, today: str) -> list[dict]:
             due = _find_date(ch["due"], body)
             if not due or due > today:
                 continue
-        items.append({"id": item_id, "title": short(title), "born": _find_date(ch.get("born"), body),
-                      "link": f"{path}:{i + 1}", "_text": title})
+        item = {"id": item_id, "title": short(title), "born": _find_date(ch.get("born"), body),
+                "link": f"{path}:{i + 1}", "_text": title}
+        until = _find_date(ch.get("parked"), body)
+        if until and until > today:
+            item["_parked_until"] = until
+        items.append(item)
     return items
 
 
@@ -346,8 +352,62 @@ def read_git_unpushed(ch: dict, root: Path, today: str, extra: dict) -> list[dic
             for r in repos if r["status"] == "ok" for c in r["commits"]]
 
 
+def read_command_lines(ch: dict, path: Path, today: str) -> list[dict]:
+    """One item per line a command prints that matches `item`; the command runs in `path`.
+
+    command     the program and its arguments, as a list (no shell)
+    item        regex for an item line. Named groups: `title` (default: the whole match),
+                `id` (default: the title) and `date` (YYYY-MM-DD: the item's date)
+    count_line  regex with one group: the number of items the command says it printed. If
+                it does not match what `item` found, the channel is an error: a format that
+                changed is never shown as fewer items
+    sort        "date": oldest date first (a deadline list); default: the command's order
+
+    A command that fails or does not answer in 60 seconds makes the channel an error.
+    """
+    cmd = ch.get("command")
+    if not isinstance(cmd, list) or not cmd or not all(isinstance(c, str) for c in cmd):
+        raise ReadError("config: command must be a list of strings")
+    if not path.is_dir():
+        raise ReadError(f"not a folder: {path}")
+    pattern = re.compile(ch.get("item", r"^(?P<title>.+)$"))
+    env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1"}
+    try:
+        run = subprocess.run(cmd, cwd=path, capture_output=True, text=True, encoding="utf-8",
+                             errors="replace", stdin=subprocess.DEVNULL, env=env, timeout=60)
+    except FileNotFoundError as exc:
+        raise ReadError(f"command not found: {cmd[0]}") from exc
+    except subprocess.TimeoutExpired as exc:
+        raise ReadError("the command did not answer in 60 s") from exc
+    if run.returncode != 0:
+        said = " ".join((run.stderr or run.stdout).split())[:200]
+        raise ReadError(f"the command failed (exit {run.returncode}): {said}")
+    items = []
+    for line in run.stdout.splitlines():
+        m = pattern.search(line)
+        if not m:
+            continue
+        groups = m.groupdict()
+        title = clean(groups.get("title") or m.group(0))
+        date_ = groups.get("date")
+        items.append({"id": short(clean(groups.get("id") or title), ID_MAX), "title": short(title),
+                      "born": date_ if date_ and re.match(r"\d{4}-\d{2}-\d{2}$", date_) else None,
+                      "_text": title})
+    if ch.get("count_line"):
+        said = re.search(ch["count_line"], run.stdout, re.M)
+        if not said:
+            raise ReadError("the command's count line was not found: its format changed")
+        if int(said.group(1)) != len(items):
+            raise ReadError(f"the command says {said.group(1)} items and {len(items)} lines "
+                            "matched `item`: its format changed")
+    if ch.get("sort") == "date":
+        items.sort(key=lambda it: it["born"] or "9999")
+    return items
+
+
 READERS = {"markdown_rows": read_markdown_rows, "json_items": read_json_items,
-           "file_count": read_file_count, "git_unpushed": read_git_unpushed}
+           "file_count": read_file_count, "git_unpushed": read_git_unpushed,
+           "command_lines": read_command_lines}
 PATHLESS = {"git_unpushed"}   # readers that take their places from the config, not `path`
 
 
@@ -393,6 +453,9 @@ def _read_channel(ch: dict, today: str, root: Path | None = None,
         if not path.exists():
             raise ReadError(f"not found: {path}")
         items = reader(ch, path, today)
+    if ch.get("parked") and extra is not None:   # parked until a later date: out of the count
+        extra["parked"] = sum(1 for it in items if it.get("_parked_until"))
+    items = [it for it in items if not it.get("_parked_until")]
     if ch.get("new_by") == "text":
         for it in items:
             it["id"] = text_id(it["_text"])
@@ -442,6 +505,8 @@ def build(root: Path, day: str | None = None, now: datetime | None = None) -> di
                             "why": ch.get("why", "")})
             continue
         entry = {"id": ch["id"], "title": ch.get("title", ch["id"]), "label": label}
+        if ch.get("note"):
+            entry["note"] = ch["note"]
         extra: dict = {}
         try:
             if label not in LABELS:
@@ -472,6 +537,10 @@ def build(root: Path, day: str | None = None, now: datetime | None = None) -> di
         entry.update(status="ok", count=len(items),
                      new=[{k: it[k] for k in ("id", "title", "link") if it.get(k)} for it in shown],
                      new_total=len(new), **extra)
+        if ch.get("show_all"):   # every item, every day: a list like deadlines is read whole
+            entry["items"] = [{k: v for k, v in (("id", it["id"]), ("title", it["title"]),
+                                                 ("date", it["born"]), ("link", it.get("link"))) if v}
+                              for it in items]
         if baseline:
             entry["baseline"] = True
         out_channels.append(entry)

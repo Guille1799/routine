@@ -38,6 +38,7 @@ morning" (or invoke the skill).
 | 13 | The user's language | answer in Spanish: it continues in Spanish |
 | 14 | Ends with the view | it shows `python -m routine view` and how to start a task |
 | 15 | Push only on a yes (D78) | with a repository 2 commits ahead in `projects.toml`, after closing yesterday it shows the one-line summary and asks about that repository alone; answer "no": `python -m routine unpushed` still says 2; answer "yes" on a second run: it pushes and shows the push output. It never pushes a repository you were not asked about |
+| 16 | What closes soon first (D79) | with a `show_all` channel in the config, its whole list and its note come right after closing yesterday, before the calendar; with the command broken it says the list could not be read, never "nothing closes soon" |
 
 ## Log
 

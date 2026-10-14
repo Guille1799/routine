@@ -124,6 +124,13 @@ too (D30). The sheet shows one count per channel and expands only what is new (D
 - **The close commits the day** (D69): when the data folder is a git repository, closing
   the day commits `diary/` and `state/` there, never `config/`, and says so; when it is not
   one, the close says it skipped the commit.
+- **What closes soon comes first** (D79): a `command_lines` channel runs the deadline command
+  a project already has and lists every line, every day, soonest first; the plan shows it
+  before anything else, with a note that the dates come from a file and were not opened today.
+  The channel checks itself: if the command's own count does not match the lines it could
+  read, the channel is an error. **Parked cards wait** (D80): a ledger card parked until a
+  review date is out of the count, never new and never offered until then; the channel says
+  how many are parked.
 - **Commits not pushed** (D78): the morning inventory has a channel with one count per
   repository, the commits on its branch that the upstream does not have; a repository with no
   upstream says "no remote", never 0, and one git cannot read is an error. The repositories
@@ -224,3 +231,5 @@ not decided (D48).
 | D73 | current | after a pause, the work phase continues where it was if the pause was shorter than the technique's break, and starts again if it was as long or longer (it counted as a break); today.json gives each task its work_started |
 | D76 | current | without a technique, a pause shorter than 5 minutes keeps the work counter running; a longer one restarts it |
 | D78 | current | commits not pushed: the morning inventory shows one count per repository ("no remote" when a branch has no upstream, never 0); at the close the list is shown and each repository is pushed only after the user says yes to it, with a plain git push whose own hooks run |
+| D79 | current | what closes soon goes at the very top of the plan: a channel can run the project's own deadline command and list every line every day, soonest first, with a note that the dates were read from a file and not opened today; a format the command no longer prints is an error, never fewer items |
+| D80 | current | a card parked until a review date is not counted, never new and never offered as an old item until that date; the channel says how many are parked |

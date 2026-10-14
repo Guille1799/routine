@@ -77,20 +77,10 @@ its `output`, which is where the repository's own guards speak. If the answer is
 say why in one line and go on: never retry another way, never push a repository the user did
 not say yes to. `no remote` and `error` repositories are only named in the summary line.
 
-If `day` is today and `open` is true, the day was already opened: skip to step 5 and offer to
+If `day` is today and `open` is true, the day was already opened: show step 2 (what closes soon), then skip to step 6 and offer to
 add tasks. If there is no diary yet, this is the first day: go on.
 
-## Step 2 · Calendar, then mail (read-only)
-
-Through the Google Calendar connector, list **today's** events: time, title, place or link.
-Through the Gmail connector, find **unanswered** mail: inbox threads from the last 7 days
-whose last message is not from the user. Show sender, subject and how many days it has
-waited, oldest first. Do not open attachments or follow links.
-
-If a connector is missing or fails, say which one and that it was **not consulted**, then go
-on. Do not ask a question in this step: just show the two short lists.
-
-## Step 3 · The inventory
+## Step 2 · What closes soon, before anything else
 
 Refresh and read the prepared sheet:
 
@@ -101,7 +91,27 @@ cd "<repo>" && python -m routine inventory
 It prints `{"ok": true, "file": "<path>", ...}`; read that JSON file. Running it again on the
 same day is safe: it gives the same new items with fresher counts.
 
-Show it in the file's order, without reordering or highlighting:
+**At the very top of the plan**, show every channel that has `show_all: true` (the deadlines,
+configured in `channels.toml`): its title, then **every** line of its `items`, in the order
+they come (soonest first), whether new or not. Under them, its `note` word for word: the dates
+come from a file and were not opened today. With no such item, say "nothing closes soon" in
+one line. If such a channel has `status: "error"`, say it could not be read and why: a
+deadline list that failed is never shown as "nothing closes soon". Ask nothing in this step.
+
+## Step 3 · Calendar, then mail (read-only)
+
+Through the Google Calendar connector, list **today's** events: time, title, place or link.
+Through the Gmail connector, find **unanswered** mail: inbox threads from the last 7 days
+whose last message is not from the user. Show sender, subject and how many days it has
+waited, oldest first. Do not open attachments or follow links.
+
+If a connector is missing or fails, say which one and that it was **not consulted**, then go
+on. Do not ask a question in this step: just show the two short lists.
+
+## Step 4 · The rest of the inventory
+
+The inventory you read in step 2. Show the other channels (not the `show_all` ones already
+shown) in the file's order, without reordering or highlighting:
 
 - one line per channel: `<title>: <count>`, plus `(<new_total> new)` when there are new items;
 - under it, the new items (`new`), each on one line. Channels marked `never_capped` (the
@@ -111,11 +121,13 @@ Show it in the file's order, without reordering or highlighting:
 - a channel with `baseline: true` is being read for the first time: show the count and say
   that nothing can be called new yet;
 - a channel with a `summary` (commits not pushed) shows that line instead of its commits;
+- a channel with `parked` says it after the count: `59 (56 parked)`. Parked items wait for
+  their review date and are never offered;
 - channels in `skipped` (copies and dead ones) are not read: mention them in one line at most.
 
-Keep the two `old` items for step 6.
+Keep the two `old` items for step 7.
 
-## Step 4 · Mode and hours (D12)
+## Step 5 · Mode and hours (D12)
 
 Ask, in its own message: **"What kind of day is it: full, normal, light or bad?"**
 Then, in the next message: **"How many hours can you work today, and when?"**
@@ -129,13 +141,13 @@ cd "<repo>" && python -m routine open-day --data '{"mode": "normal", "hours": 4,
 How many tasks fit is the user's call; you may mention the hours they gave when they add
 tasks. On a **bad** day, aim for one small task whose first step is trivial, and do not push.
 
-## Step 5 · The priority (asked, never proposed)
+## Step 6 · The priority (asked, never proposed)
 
 Ask: **"What is the one thing that, done today, makes the day worth it?"** Do not suggest
 one. If the user hesitates, you may repeat facts already shown (a deadline today, an
 interview, what is new), and ask again. The priority becomes a task with `"priority": true`.
 
-## Step 6 · The tasks, each with a complete card (D10, D37, D47)
+## Step 7 · The tasks, each with a complete card (D10, D37, D47)
 
 For the priority and for each task the user names, build the card. A task cannot be
 started later without `done_when`, `first_step` and `perimeter`, so complete them now:
@@ -164,7 +176,7 @@ today: <title> (waiting since <since>) and <title>. Take one as a task, or leave
 A taken one is a task like the others, with `"kind": "old"`. On a bad day, mention them
 without asking.
 
-## Step 7 · Close the morning
+## Step 8 · Close the morning
 
 Run `python -m routine view` and show it. Remind the user, in one line, how to start: say
 "let's do T1" (or the task's name) in any session. Then stop: the morning is done.

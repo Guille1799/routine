@@ -90,7 +90,8 @@ inventory/YYYY-MM-DD.json:
 {"generated": ISO, "day": "YYYY-MM-DD",
  "channels": [{"id", "title", "label": "source", "status": "ok"|"error", "error"?,
                "count", "new": [{"id", "title", "link"?}], "new_total", "baseline"?,
-               "summary"?, "repos"?}],
+               "summary"?, "repos"?, "parked"?, "note"?,
+               "items"?: [{"id", "title", "date"?, "link"?}]}],
  "skipped":  [{"id", "title", "label": "copy"|"dead", "why"}],
  "old":      [{"channel", "id", "title", "since": "YYYY-MM-DD"|null, "link"?}]}
 ```
@@ -102,6 +103,10 @@ inventory/YYYY-MM-DD.json:
 - `baseline: true` = the channel is read for the first time, so nothing can be called new.
 - `old` = the oldest pending items of channels marked `old = true` (D31), two a day, never
   the same one within 7 days.
+- `show_all: true` in channels.toml adds `items`: every item, every day (deadlines, D79).
+  `note` is copied from channels.toml, for the skill to show word for word.
+- `parked` = items parked until a later review date (D80): not in `count`, never new, never
+  in `old`.
 - A `git_unpushed` channel (D78) adds `summary` (`"app 2 · notes no remote"`) and `repos`:
   `[{"repo", "path", "status": "ok"|"no remote"|"error", "branch"?, "upstream"?, "ahead"?,
   "why"?, "error"?}]`. Its items are the commits not pushed. A repository git cannot read
